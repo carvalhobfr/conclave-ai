@@ -100,3 +100,22 @@ nav { display:grid; gap:4px; } nav button { color:#aeb9c7; background:transparen
 
 @media (max-width:900px) { .validation-controls, .configuration-form { grid-template-columns:1fr; align-items:stretch; }.configuration-form .model-field { grid-template-columns:1fr; }.configuration-form .run-button { grid-column:1; }.decision-metrics, .impact-metrics { grid-template-columns:repeat(2,1fr); }.impact-columns, .recommendation { grid-template-columns:1fr; } .app-shell { grid-template-columns:minmax(0, 1fr); }.sidebar { border-right:0; border-bottom:1px solid #27313e; padding:12px; }.sidebar nav { min-width:0; grid-template-columns:repeat(5, auto); overflow:auto; }.sidebar .repo-picker { margin-top:0; display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:center; }.repo-picker h2, .repo-picker p { grid-column:1/-1; }.repo-picker > button { margin:0; }.workspace { padding:0 16px 32px; }.evidence-layout { grid-template-columns:1fr; }.evidence-list { border-right:0; border-bottom:1px solid #2c3948; max-height:160px; overflow:auto; }.metrics { grid-template-columns:repeat(2,1fr); }.provider-grid { grid-template-columns:1fr; } }
 @media (prefers-reduced-motion:reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition:none !important; animation:none !important; } }
+
+/* Decision-first review: evidence gaps stay visible at every viewport width. */
+.decision-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; margin: 20px 0; }
+.decision-card, .coverage-details { padding: 20px; border: 1px solid #334254; border-radius: 12px; min-width: 0; overflow-wrap: anywhere; }
+.decision-card h3 { margin-top: 0; }
+.decision-card h3 span { font-size: .85em; opacity: .65; }
+.decision-card ul { padding-left: 20px; }
+.decision-card li + li { margin-top: 12px; }
+.decision-card li p { margin: 5px 0; }
+.decision-actions { grid-column: 1 / -1; display: flex; gap: 12px; flex-wrap: wrap; }
+.decision-actions button, .decision-card button { background: #1d2a38; color: #e7edf4; padding: 10px 14px; border: 1px solid #334254; border-radius: 8px; cursor: pointer; }
+.coverage-details { margin-top: 20px; }
+.coverage-details summary { cursor: pointer; font-weight: 600; }
+.rule-check { padding: 12px 0; border-top: 1px solid #334254; }
+.rule-check p { margin: 6px 0; }
+@media (max-width: 800px) { .decision-columns { grid-template-columns: minmax(0, 1fr); } }
+.topbar { gap: 12px; flex-wrap: wrap; }
+.topbar > div { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .validation-summary { padding: 18px; } .topbar { padding: 12px 0; } }

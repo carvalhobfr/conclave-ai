@@ -92,13 +92,13 @@ const run: ProductRunView = {
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function mockFetch(): ReturnType<typeof vi.fn> {
+function mockFetch(validationResult: ValidationRunView = validation): ReturnType<typeof vi.fn> {
   const mock = vi.fn((url: string, init?: RequestInit) => {
     const body = url === "/api/runtime/models"
       ? { provider: "opencode-go", endpoint: "https://opencode.ai/zen/go/v1/models", models: ["kimi-k2.7-code", "deepseek-v4-flash"] }
       : url === "/api/runtime" && init?.method === "POST"
       ? { saved: true, credentialUpdated: true, runtime: configuredRuntime, diagnostic: { mode: "api", provider: "opencode-go", endpoint: "https://opencode.ai/zen/go/v1", modelConfigured: true, endpointReachable: true, inferenceAvailable: true, retrievalLocal: true, externalCallsDisabled: false, message: "Bounded provider inference succeeded." } }
-      : url === "/api/runtime" ? runtime : url === "/api/projects/demo" ? project : url === "/api/validate" ? validation : url.startsWith("/api/history") ? [] : run;
+      : url === "/api/runtime" ? runtime : url === "/api/projects/demo" ? project : url === "/api/validate" ? validationResult : url.startsWith("/api/history") ? [] : run;
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
   });
   vi.stubGlobal("fetch", mock);
@@ -115,9 +115,9 @@ describe("Conclave product UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review change" }));
 
     expect(await screen.findByRole("region", { name: "Validation summary" })).toBeTruthy();
-    expect(screen.getByText("Change is consistent with the objective")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "No deterministic blocker or warning found" })).toBeTruthy();
     expect(screen.getByText(/Reasoning model calls: 0/i)).toBeTruthy();
-    expect(screen.getByText("0", { selector: ".decision-metrics strong" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Still needs verification" }).textContent).toContain("runtime behavior");
     expect(screen.queryByRole("region", { name: "Raw validation report" })).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Raw report" }));
@@ -184,5 +184,32 @@ describe("Conclave product UI", () => {
       apiKey: "test-browser-key",
     }));
     expect(screen.getByLabelText<HTMLInputElement>("API key").value).toBe("");
+  });
+});
+
+describe("decision-first review", () => {
+  it("shows partial rule coverage, pending verification and working evidence navigation", async () => {
+    mockFetch({ ...validation, report: { ...validation.report, schemaVersion: 3, escalation: { recommended: true, reasons: ["Exercise save and reload."], dimensions: [{ dimension: "data-integrity", coverage: "partial", reason: "Only storage key syntax was examined.", remainingQuestions: ["Exercise save and reload."], checks: [{ rule: "inconsistent-key", status: "no-finding", scope: "Storage key syntax only.", paths: ["src/store.ts"], findingIds: [] }] }] } } });
+    render(<App />);
+    await screen.findByText("auth-repository");
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    await screen.findByRole("region", { name: "Validation summary" });
+    expect(screen.getByText("Exercise save and reload.")).toBeTruthy();
+    fireEvent.click(screen.getByText("What the rules examined"));
+    expect(screen.getByText(/DATA INTEGRITY · Partial coverage/)).toBeTruthy();
+    expect(screen.getByText(/No finding within this rule/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Inspect reviewed diff" }));
+    expect(screen.getByRole("region", { name: "Git diff" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Summary" }));
+    fireEvent.click(screen.getByRole("button", { name: "Prepare agent handoff" }));
+    expect(screen.getByRole("region", { name: "Agent handoff" })).toBeTruthy();
+  });
+  it("shows historical coverage limitations for v2", async () => {
+    mockFetch(); render(<App />);
+    await screen.findByText("auth-repository");
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    await screen.findByRole("region", { name: "Validation summary" });
+    expect(screen.getByRole("region", { name: "Still needs verification" }).textContent).toContain("Historical report");
+    expect(screen.queryByText(/claims proved/)).toBeNull();
   });
 });

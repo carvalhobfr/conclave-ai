@@ -57,3 +57,15 @@ describe("review history", () => {
     }
   });
 });
+
+describe("report version retention", () => {
+  it.each([2, 3])("preserves schema %s reports through subsequent history writes", async (version) => {
+    const root = await mkdtemp(join(tmpdir(), "conclave-history-version-"));
+    const first = { id: "first", createdAt: "2026-09-08T00:00:00Z", repository: root, objective: "Test", headSha: "abc", summary, report: { schemaVersion: version, verdict: "pass" } };
+    try {
+      await saveReviewHistory(root, first as never);
+      await saveReviewHistory(root, { ...first, id: "second" } as never);
+      expect((await listReviewHistory(root))[1]?.report?.schemaVersion).toBe(version);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+});

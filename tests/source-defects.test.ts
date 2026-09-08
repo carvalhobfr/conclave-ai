@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { RepositoryCodeIndex } from "../src/domain/code-index.js";
 import type { ValidationChangedFile } from "../src/domain/validation.js";
-import { findSourceDefects } from "../src/validation/source-defects.js";
+import { analyzeSourceDefects, findSourceDefects } from "../src/validation/source-defects.js";
 
 function index(files: Readonly<Record<string, string>>): RepositoryCodeIndex {
   return {
@@ -27,12 +27,12 @@ describe("deterministic source defects", () => {
     expect(kinds({ "src/a.ts": source }, [whole("src/a.ts")])).toEqual(["unreleased-resource"]);
   });
 
-  it("stays silent when the release call exists anywhere in the project", () => {
+  it("does not treat cleanup in another file as a verified match", () => {
     const files = {
       "src/a.ts": 'export function init() {\n  window.addEventListener("storage", handler);\n}\n',
       "src/teardown.ts": 'export function stop() {\n  window.removeEventListener("storage", handler);\n}\n',
     };
-    expect(kinds(files, [whole("src/a.ts")])).toEqual([]);
+    expect(kinds(files, [whole("src/a.ts")])).toEqual(["unreleased-resource"]);
   });
 
   it("reports an empty catch block and accepts one with a body", () => {
@@ -102,5 +102,60 @@ describe("deterministic source defects", () => {
     const source = 'window.addEventListener("storage", handler);\n';
     expect(kinds({ "src/a.ts": source }, [{ path: "src/a.ts", status: "deleted", hunks: [] }])).toEqual([]);
     expect(kinds({ "src/a.py": source }, [whole("src/a.py")])).toEqual([]);
+  });
+});
+
+describe("source rule precision regressions", () => {
+  it.each([
+    'window.removeEventListener("click", handler);',
+    'document.removeEventListener("storage", handler);',
+    'window.removeEventListener("storage", anotherHandler);',
+    'window.removeEventListener("storage", handler, true);',
+    '// window.removeEventListener("storage", handler);',
+    'const note = `window.removeEventListener("storage", handler)`;',
+  ])("does not let unrelated or non-code cleanup hide a listener: %s", (decoy) => {
+    expect(kinds({ "src/a.ts": `window.addEventListener("storage", handler);\n${decoy}` }, [whole("src/a.ts")])).toContain("unreleased-resource");
+  });
+  it("recognizes multiline matching listener calls without claiming runtime execution", () => {
+    const source = 'window.addEventListener(\n "storage",\n handler\n);\nwindow.removeEventListener("storage", handler);';
+    expect(kinds({ "src/a.ts": source }, [whole("src/a.ts")])).toEqual([]);
+  });
+  it("does not conflate two identical inline function bodies", () => {
+    const source = 'window.addEventListener("storage", () => run()); window.removeEventListener("storage", () => run());';
+    expect(kinds({ "src/a.ts": source }, [whole("src/a.ts")])).toContain("unreleased-resource");
+  });
+  it("respects native once listeners", () => {
+    expect(kinds({ "src/a.ts": 'window.addEventListener("storage", handler, {once: true});' }, [whole("src/a.ts")])).toEqual([]);
+  });
+  it("matches interval and subscription cleanup to the acquired value", () => {
+    const correct = 'const timer = setInterval(tick, 1000); clearInterval(timer); const sub = events.subscribe(handle); sub.unsubscribe();';
+    const wrong = 'const timer = setInterval(tick, 1000); clearInterval(other); const sub = events.subscribe(handle); otherSub.unsubscribe();';
+    expect(kinds({ "src/a.ts": correct }, [whole("src/a.ts")])).toEqual([]);
+    expect(kinds({ "src/a.ts": wrong }, [whole("src/a.ts")])).toEqual(["unreleased-resource", "unreleased-resource"]);
+  });
+  it("detects a catch whose body was emptied while the catch line stayed unchanged", () => {
+    const source = 'try { run(); } catch {\n\n}';
+    expect(kinds({ "src/a.ts": source }, [{ path: "src/a.ts", status: "modified", hunks: [{ oldStart: 2, oldCount: 1, newStart: 2, newCount: 1 }] }])).toEqual(["discarded-error"]);
+  });
+  it("ignores source-like strings and multiline comments", () => {
+    const source = '/*\nwindow.addEventListener("x", handler);\ntry {} catch {}\n*/\nconst note = `localStorage.getItem(KEY); localStorage.removeItem("wrong");`;';
+    expect(kinds({ "src/a.ts": source }, [whole("src/a.ts")])).toEqual([]);
+  });
+  it("does not confuse localStorage with sessionStorage or an unrelated object", () => {
+    const source = 'const KEY = "a"; localStorage.setItem(KEY, "v"); sessionStorage.getItem("b"); custom.getItem("c");';
+    expect(kinds({ "src/a.ts": source }, [whole("src/a.ts")])).toEqual([]);
+  });
+});
+
+describe("evaluated check count", () => {
+  it("counts evaluated rule scopes even when they produce no finding", () => {
+    const source = 'export function add(a: number, b: number) { return a + b; }';
+    const result = analyzeSourceDefects(index({ "src/a.ts": source }), [whole("src/a.ts")]);
+    expect(result.defects).toEqual([]);
+    expect(result.checksPerformed).toBe(3);
+  });
+  it("reports a catch emptied by a deletion-only hunk", () => {
+    const source = 'try { run(); } catch {\n}';
+    expect(kinds({ "src/a.ts": source }, [{ path: "src/a.ts", status: "modified", hunks: [{ oldStart: 2, oldCount: 1, newStart: 1, newCount: 0 }] }])).toEqual(["discarded-error"]);
   });
 });

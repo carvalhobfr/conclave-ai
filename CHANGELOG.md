@@ -4,6 +4,27 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.9.0] — 2026-09-08
+
+### Added
+
+- Decision-first cockpit with next action, findings requiring attention, missing verification evidence, correction progress and navigation to the reviewed diff and agent handoff.
+- Rule-level scope, applicability, source paths and open verification questions in schema v3. CLI summaries and handoffs retain the same evidence gaps.
+- A staged 0.9 product plan and a repeatable `eval:precision` regression suite.
+
+### Changed
+
+- The check counter includes evaluated scopes without findings; responsive headers wrap long repository paths.
+
+- Narrow source checks use the TypeScript syntax tree, ignoring comments and strings and supporting multiline calls. Cleanup candidates must match the listener receiver/event/handler/capture, interval handle or subscription binding in the same file. Candidate matching remains syntactic, not proof of teardown execution.
+- Storage-key observations distinguish storage receivers and resolve top-level literal constants. Empty catches include edits inside their bodies.
+- PASS and structural claims no longer imply completion of the objective in the cockpit.
+- New reports use schema v3 and partial/unchecked dimension coverage. V2 schema, history and digest-based rechecks remain supported with legacy limitations. Consumers rejecting unknown schema versions must add v3 support.
+
+### Scope
+
+- Criteria editing, verified CI attestations, runtime collection and hosted collaboration remain planned for later minor releases. The review engine still makes no model call or repository-script execution.
+
 ## [0.8.0] — 2026-08-18
 
 The first release of the PR-companion line to reach npm. The previously published version is `0.2.8`.

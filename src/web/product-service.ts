@@ -218,9 +218,9 @@ function validationView(report: ValidationReport, patch: string, demo: boolean):
     ?? report.findings.find((item) => item.severity === "warning");
   const copy = {
     pass: {
-      headline: "Change is consistent with the objective",
-      explanation: "Conclave found no deterministic contradiction, scope violation, or unresolved graph risk.",
-      recommendation: "The change can proceed to human review with the evidence below.",
+      headline: "No deterministic blocker or warning found",
+      explanation: "The configured structural checks found no findings requiring attention. Delivery behavior remains unverified by this result.",
+      recommendation: "Inspect the verification gaps and relevant execution evidence before requesting human approval.",
     },
     warn: {
       headline: "Change needs review before approval",

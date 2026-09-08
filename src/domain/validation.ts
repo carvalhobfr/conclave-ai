@@ -277,18 +277,30 @@ export interface ValidationChallenge {
   readonly suggestedProbes: readonly string[];
 }
 
+export interface ValidationRuleCheck {
+  readonly rule: ValidationFindingKind;
+  readonly status: "finding" | "no-finding" | "not-applicable";
+  readonly scope: string;
+  readonly paths: readonly string[];
+  readonly findingIds: readonly string[];
+}
+
 export interface ValidationEscalation {
   readonly recommended: boolean;
   readonly dimensions: readonly {
     readonly dimension: ValidationChallengeStrategy;
-    readonly coverage: "evidenced" | "checked-clean" | "unchecked";
+    /** evidenced/checked-clean are historical v2 values only. */
+    readonly coverage: "partial" | "evidenced" | "checked-clean" | "unchecked";
     readonly reason: string;
+    /** Absent in historical v2 reports; absence is not complete coverage. */
+    readonly checks?: readonly ValidationRuleCheck[];
+    readonly remainingQuestions?: readonly string[];
   }[];
   readonly reasons: readonly string[];
 }
 
 export interface ValidationReport {
-  readonly schemaVersion: 2;
+  readonly schemaVersion: 2 | 3;
   readonly verdict: ValidationVerdict;
   readonly summary: string;
   readonly objective: string;
@@ -306,6 +318,6 @@ export interface ValidationReport {
   readonly findingLifecycle: ValidationFindingLifecycle;
   readonly receipts: ValidationReceiptSummary;
   readonly challengePlan: readonly ValidationChallenge[];
-  /** Whether a model pass can still answer something the structural layer cannot. */
+  /** Whether focused verification remains (tests, human review or optional reasoning). */
   readonly escalation: ValidationEscalation;
 }

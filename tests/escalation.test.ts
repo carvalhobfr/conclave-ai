@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { ValidationChallenge, ValidationClaimResult, ValidationFinding } from "../src/domain/validation.js";
-import { assessEscalation } from "../src/validation/escalation.js";
+import { assessEscalation as assess } from "../src/validation/escalation.js";
+
+function assessEscalation(plan: readonly ValidationChallenge[], findings: readonly ValidationFinding[], claims: readonly ValidationClaimResult[]) {
+  return assess(plan, findings, claims, { files: [{ path: "src/feature.ts", status: "added", hunks: [] }], indexedPaths: new Set(["src/feature.ts"]) });
+}
 
 function challenge(strategy: ValidationChallenge["strategy"]): ValidationChallenge {
   return { strategy, reason: "r", evidenceIds: [], suggestedProbes: [] };
@@ -37,30 +41,30 @@ describe("escalation assessment", () => {
     expect(result.reasons).toEqual([]);
   });
 
-  it("marks a dimension evidenced when its matching finding is present", () => {
+  it("keeps broader questions open when a narrow rule produces a finding", () => {
     const result = assessEscalation(
       [challenge("baseline"), challenge("data-integrity")],
       [finding("inconsistent-key")],
       [],
     );
-    expect(result.recommended).toBe(false);
-    expect(result.dimensions).toEqual([
-      { dimension: "data-integrity", coverage: "evidenced", reason: expect.stringContaining("produced a deterministic finding") as unknown },
-    ]);
+    expect(result.recommended).toBe(true);
+    expect(result.dimensions[0]?.coverage).toBe("partial");
+    expect(result.dimensions[0]?.checks?.[0]?.status).toBe("finding");
+    expect(result.dimensions[0]?.remainingQuestions?.[0]).toContain("transaction");
   });
 
-  it("marks a dimension checked-clean when it has a check but no finding fired", () => {
+  it("records no-finding only within a narrow rule and retains verification questions", () => {
     const result = assessEscalation([challenge("baseline"), challenge("lifecycle-state")], [], []);
-    expect(result.recommended).toBe(false);
-    expect(result.dimensions[0]?.coverage).toBe("checked-clean");
+    expect(result.recommended).toBe(true);
+    expect(result.dimensions[0]?.coverage).toBe("partial");
+    expect(result.dimensions[0]?.checks?.every((check) => check.status === "no-finding")).toBe(true);
   });
 
   it("recommends escalation for a dimension with no deterministic check at all", () => {
     const result = assessEscalation([challenge("baseline"), challenge("security")], [], []);
     expect(result.recommended).toBe(true);
-    expect(result.dimensions).toEqual([
-      { dimension: "security", coverage: "unchecked", reason: expect.stringContaining("no deterministic check covers that class") as unknown },
-    ]);
+    expect(result.dimensions[0]?.coverage).toBe("unchecked");
+    expect(result.dimensions[0]?.checks).toEqual([]);
     expect(result.reasons).toHaveLength(1);
   });
 
@@ -87,5 +91,22 @@ describe("escalation assessment", () => {
     );
     expect(result.recommended).toBe(true);
     expect(result.reasons).toHaveLength(2);
+  });
+});
+
+describe("rule applicability", () => {
+  it.each(["src/flow.py", "src/Flow.java", "src/flow.rs"])("does not claim source rules checked %s", (path) => {
+    const result = assess([challenge("lifecycle-state")], [], [], { files: [{ path, status: "added", hunks: [] }], indexedPaths: new Set([path]) });
+    expect(result.dimensions[0]?.coverage).toBe("unchecked");
+    expect(result.dimensions[0]?.checks?.every((check) => check.status === "not-applicable")).toBe(true);
+    expect(result.recommended).toBe(true);
+  });
+  it("does not label unavailable source as checked", () => {
+    const result = assess([challenge("data-integrity")], [], [], { files: [{ path: "src/flow.ts", status: "added", hunks: [] }], indexedPaths: new Set() });
+    expect(result.dimensions[0]?.coverage).toBe("unchecked");
+  });
+  it("does not label deletion-only lines as a clean source check", () => {
+    const result = assess([challenge("data-integrity")], [], [], { files: [{ path: "src/flow.ts", status: "modified", hunks: [{ oldStart: 1, oldCount: 2, newStart: 1, newCount: 0 }] }], indexedPaths: new Set(["src/flow.ts"]) });
+    expect(result.dimensions[0]?.checks?.[0]?.status).toBe("not-applicable");
   });
 });

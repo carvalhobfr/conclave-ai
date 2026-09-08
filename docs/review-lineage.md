@@ -1,6 +1,6 @@
 # Review lineage and evidence receipts
 
-Conclave keeps the finish line fixed while a developer or coding agent changes the code. A schema-v2 report identifies the review series, exact artifact, contract, previous report, recurring findings, attached external evidence, and selected challenge strategies.
+Conclave keeps the finish line fixed while a developer or coding agent changes the code. A schema-v2 or schema-v3 report identifies the review series, exact artifact, contract, previous report, recurring findings, attached external evidence, and selected challenge strategies.
 
 ## Correction-loop protocol
 
@@ -74,3 +74,9 @@ All current trust claims are effectively `self-reported`. Verified CI attestatio
 ## Adaptive challenges
 
 Every report keeps the deterministic baseline and adds at most three focused strategies selected from repository evidence: security, data integrity, lifecycle/state, public API compatibility, blast radius, performance, UX/accessibility, and test gap. The report gives a reason and suggested probes. Their presence means “challenge this risk,” not “these probes ran.”
+
+## Schema v3 coverage and v2 compatibility
+
+Conclave 0.9 emits schema v3. Risk dimensions use `partial` or `unchecked`; each lists `checks` with rule identity, `finding`/`no-finding`/`not-applicable` status, exact scope, source paths and finding IDs, plus `remainingQuestions`. No current rule verifies a full risk dimension. Further verification may require tests or human analysis; the escalation signal never launches a model or executes a repository script.
+
+The v2 schema remains unchanged. CLI, history and skill readers accept v2/v3, and rechecking a v2 report validates its original digest without rewriting it. Legacy coverage is displayed with an explicit limitation. The report digest still covers all fields, including coverage. The criterion editor and verified CI provenance are later 0.9 milestones; receipts remain effectively self-reported.

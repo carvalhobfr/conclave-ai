@@ -20,7 +20,7 @@ interface ReportSchema {
 
 async function schema(): Promise<ReportSchema> {
   return JSON.parse(
-    await readFile(resolve("schemas/validation-report.v2.schema.json"), "utf8"),
+    await readFile(resolve("schemas/validation-report.v3.schema.json"), "utf8"),
   ) as ReportSchema;
 }
 

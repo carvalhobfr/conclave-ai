@@ -56,6 +56,7 @@ export * from "./storage/review-history.js";
 export * from "./domain/validation.js";
 export * from "./domain/pr-summary.js";
 export * from "./domain/review-handoff.js";
+export * from "./domain/review-decision.js";
 export * from "./validation/contract-parser.js";
 export * from "./validation/git-change-set.js";
 export * from "./validation/deterministic-index.js";

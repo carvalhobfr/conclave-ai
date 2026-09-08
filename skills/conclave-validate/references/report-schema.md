@@ -1,6 +1,6 @@
 # Validation report contract
 
-The runner emits Conclave validation report schema v2. The canonical JSON Schema is `schemas/validation-report.v2.schema.json` in the Conclave distribution. Schema v1 remains published only for consumers reading historical reports.
+The runner accepts schema v2 and v3. Conclave 0.9 emits schema v3, declared in `schemas/validation-report.v3.schema.json`. The unchanged v2 schema remains published for historical reports. V3 replaces dimension-level `evidenced`/`checked-clean` coverage with `partial`/`unchecked`, records each narrow rule and its applicability, and preserves remaining verification questions even when a finding exists. V2 report digests remain valid across rechecks. Neither schema establishes behavioral completion.
 
 ## Verdict and exit code
 

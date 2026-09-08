@@ -13,6 +13,7 @@ import type {
   ValidationRequestView,
   ValidationRunView,
 } from "../../src/web/contracts.js";
+import { createReviewDecision } from "../../src/domain/review-decision.js";
 import { api } from "./api.js";
 
 const DEFAULT_VALIDATE = "Verify that this change resolves its stated objective without unrelated regressions.";
@@ -64,31 +65,21 @@ function ValidationTabs({ tab, onSelect }: { readonly tab: WorkspaceTab; readonl
   return <div className="result-tabs validation-tabs" role="tablist" aria-label="Validation result views">{tabs.map((item) => <button key={item.id} role="tab" aria-selected={tab === item.id} onClick={() => onSelect(item.id)}>{item.label}</button>)}</div>;
 }
 
-function ValidationSummary({ result }: { readonly result: ValidationRunView }) {
+function ValidationSummary({ result, onSelect }: { readonly result: ValidationRunView; readonly onSelect: (tab: WorkspaceTab) => void }) {
   const report = result.report;
+  const decision = createReviewDecision(report);
+  const escalation = (report as Partial<ValidationRunView["report"]>).escalation;
   const trust = report.trustBoundary;
-  const claimCopy = result.counts.totalClaims === 0
-    ? "No explicit claims"
-    : `${String(result.counts.supportedClaims)}/${String(result.counts.totalClaims)} claims proved`;
   return <section className={`validation-summary validation-${result.verdict}`} aria-label="Validation summary">
-    <header className="decision-header"><span className="decision-kicker">Independent verdict</span><div><span className={`decision-badge ${result.verdict}`}>{result.verdict.toUpperCase()}</span>{result.demo && <span className="demo-badge">DEMO FIXTURE</span>}</div><h2>{result.headline}</h2><p>{result.explanation}</p></header>
-    <div className="decision-metrics">
-      <article><strong>{report.metrics.filesChanged}</strong><span>files changed</span></article>
-      <article><strong>{report.metrics.impactedFiles}</strong><span>files impacted</span></article>
-      <article><strong>{result.counts.blocking}</strong><span>blocking findings</span></article>
-      <article><strong>{claimCopy}</strong><span>completion evidence</span></article>
+    <header className="decision-header"><span className="decision-kicker">Delivery review</span><div><span className={`decision-badge ${result.verdict}`}>{result.verdict.toUpperCase()}</span>{result.demo && <span className="demo-badge">DEMO FIXTURE</span>}</div><h2>{decision.headline}</h2><p>{report.objective}</p></header>
+    <div className="recommendation"><strong>Next action</strong><p>{decision.nextAction}</p><div className="decision-actions"><button type="button" onClick={() => onSelect("handoff")}>Prepare agent handoff</button><button type="button" onClick={() => onSelect("diff")}>Inspect reviewed diff</button></div></div>
+    <div className="decision-columns">
+      <section className="decision-card" aria-label="Needs attention"><h3>Needs attention <span>{decision.attention.length}</span></h3>{decision.attention.length === 0 ? <p>No deterministic blocker or warning found. This does not establish that the requested behavior works.</p> : <><ul>{decision.attention.slice(0, 3).map((finding) => <li key={finding.id}><strong>{finding.title}</strong><p>{finding.remediation}</p></li>)}</ul><button type="button" onClick={() => onSelect("findings")}>Inspect all findings and evidence</button></>}</section>
+      <section className="decision-card" aria-label="Still needs verification"><h3>Still needs verification <span>{decision.verificationGaps.length}</span></h3>{decision.verificationGaps.length === 0 ? <p>No verification tasks for this comparison.</p> : <ul>{decision.verificationGaps.map((gap) => <li key={gap}>{gap}</li>)}</ul>}</section>
     </div>
-    <section className={`largest-risk ${result.largestRisk?.severity ?? "clear"}`}>
-      <span>Largest remaining risk</span>
-      <h3>{result.largestRisk?.title ?? "No deterministic risk found"}</h3>
-      <p>{result.largestRisk?.detail ?? "The graph and contract checks found no unresolved contradiction in the collected change."}</p>
-    </section>
-    <div className="recommendation"><strong>Recommendation</strong><p>{result.recommendation}</p></div>
-    <footer className="validation-footnote">
-      <p>Objective: {report.objective}</p>
-      <p>Knowledge: {trust.knowledge.parser} parser, {trust.knowledge.graph} graph, {trust.knowledge.embedding.kind} embeddings. Reasoning model calls: {trust.reasoningModelCalls}; remote embedding calls: {trust.knowledge.embedding.remoteCalls}; repository scripts: not executed.</p>
-      <p>Guarantee: this is deterministic structural evidence, not proof of arbitrary runtime behavior.</p>
-    </footer>
+    <section className="decision-card" aria-label="Correction progress"><h3>Since the previous review</h3><p>{decision.progress}</p></section>
+    <details className="coverage-details"><summary>What the rules examined</summary><p>Rule results describe a limited syntax check. Further verification may require tests, human review or an optional model; Conclave does not run those automatically.</p>{report.schemaVersion === 2 && <p>Historical report: detailed rule coverage is unavailable. Legacy clean and evidenced labels do not establish complete coverage.</p>}{(escalation?.dimensions ?? []).map((dimension) => <article key={dimension.dimension}><h4>{statusLabel(dimension.dimension)} · {dimension.coverage === "partial" ? "Partial coverage" : dimension.coverage === "unchecked" ? "Not checked" : "Legacy coverage"}</h4><p>{dimension.reason}</p>{dimension.checks?.map((check) => <div className="rule-check" key={check.rule}><strong>{check.rule} · {check.status === "no-finding" ? "No finding within this rule" : check.status === "not-applicable" ? "No applicable source" : "Finding reported"}</strong><p>{check.scope}</p><small>{check.paths.join(", ")}</small></div>)}</article>)}{(escalation?.dimensions.length ?? 0) === 0 && <p>No focused risk dimension selected. This does not establish complete behavioral coverage.</p>}</details>
+    <footer className="validation-footnote"><p>{report.metrics.filesChanged} files changed · {report.metrics.impactedFiles} files impacted · {result.counts.supportedClaims}/{result.counts.totalClaims} structural claims supported</p><p>Knowledge: {trust.knowledge.parser} parser, {trust.knowledge.graph} graph. Reasoning model calls: {trust.reasoningModelCalls}; remote embedding calls: {trust.knowledge.embedding.remoteCalls}; repository scripts: not executed.</p><p>PASS means no deterministic blocker or warning was found. Human approval and behavioral verification remain separate.</p></footer>
   </section>;
 }
 
@@ -112,7 +103,7 @@ function ValidationImpact({ result }: { readonly result: ValidationRunView }) {
 }
 
 function ValidationWorkspace({ result, tab, onSelect }: { readonly result: ValidationRunView; readonly tab: WorkspaceTab; readonly onSelect: (tab: WorkspaceTab) => void }) {
-  return <><ValidationTabs tab={tab} onSelect={onSelect} />{tab === "findings" ? <ValidationFindings result={result} /> : tab === "claims" ? <ValidationClaims result={result} /> : tab === "impact" ? <ValidationImpact result={result} /> : tab === "diff" ? <section className="raw-report" aria-label="Git diff"><header><h2>Exact Git diff reviewed</h2><p>This is the patch that produced the report.</p></header><pre><code>{result.patch || "No patch was collected."}</code></pre></section> : tab === "handoff" ? <section className="handoff-panel" aria-label="Agent handoff"><header><div><span>Next step</span><h2>Send this to your coding agent</h2></div><button type="button" onClick={() => void navigator.clipboard.writeText(result.handoff)}>Copy prompt</button></header><p>Conclave points to evidence; Codex, Claude Code, or your agent makes the correction.</p><pre><code>{result.handoff}</code></pre></section> : tab === "raw" ? <section className="raw-report" aria-label="Raw validation report"><header><h2>Machine-readable report</h2><p>The UI above is derived from this exact object.</p></header><pre><code>{JSON.stringify(result.report, null, 2)}</code></pre></section> : <ValidationSummary result={result} />}</>;
+  return <><ValidationTabs tab={tab} onSelect={onSelect} />{tab === "findings" ? <ValidationFindings result={result} /> : tab === "claims" ? <ValidationClaims result={result} /> : tab === "impact" ? <ValidationImpact result={result} /> : tab === "diff" ? <section className="raw-report" aria-label="Git diff"><header><h2>Exact Git diff reviewed</h2><p>This is the patch that produced the report.</p></header><pre><code>{result.patch || "No patch was collected."}</code></pre></section> : tab === "handoff" ? <section className="handoff-panel" aria-label="Agent handoff"><header><div><span>Next step</span><h2>Send this to your coding agent</h2></div><button type="button" onClick={() => void navigator.clipboard.writeText(result.handoff)}>Copy prompt</button></header><p>Conclave points to evidence; Codex, Claude Code, or your agent makes the correction.</p><pre><code>{result.handoff}</code></pre></section> : tab === "raw" ? <section className="raw-report" aria-label="Raw validation report"><header><h2>Machine-readable report</h2><p>The UI above is derived from this exact object.</p></header><pre><code>{JSON.stringify(result.report, null, 2)}</code></pre></section> : <ValidationSummary result={result} onSelect={onSelect} />}</>;
 }
 
 function HistoryPanel({ records }: { readonly records: readonly ReviewHistoryView[] }) {

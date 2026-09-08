@@ -1,4 +1,5 @@
 import type { ValidationReport } from "./validation.js";
+import { createReviewDecision } from "./review-decision.js";
 
 export interface PullRequestSummary {
   readonly title: string;
@@ -14,6 +15,8 @@ export interface PullRequestSummary {
   readonly impactedFiles: number;
   readonly risks: readonly string[];
   readonly nextSteps: readonly string[];
+  readonly verificationGaps?: readonly string[];
+  readonly reviewProgress?: string;
 }
 
 function comparison(report: ValidationReport): string {
@@ -39,6 +42,7 @@ function title(report: ValidationReport): string {
 }
 
 export function createPullRequestSummary(report: ValidationReport): PullRequestSummary {
+  const decision = createReviewDecision(report);
   const fileCount = report.metrics.filesChanged;
   const impact = report.metrics.impactedFiles;
   const summary = fileCount === 0
@@ -48,15 +52,7 @@ export function createPullRequestSummary(report: ValidationReport): PullRequestS
     .filter((finding) => finding.severity !== "info")
     .slice(0, 5)
     .map((finding) => `${finding.severity.toUpperCase()}: ${finding.title}`);
-  const nextSteps = report.verdict === "pass"
-    ? fileCount === 0
-      ? ["No action is required unless you expected another base or source."]
-      : ["Review the evidence and run the repository's tests before merging."]
-    : report.verdict === "warn"
-      ? ["Inspect the warnings and affected code before requesting human approval."]
-      : report.verdict === "block"
-        ? ["Resolve the blocking findings, then run `conclave check` again."]
-        : ["Provide a clearer objective or baseline, then run `conclave check` again."];
+  const nextSteps = [decision.nextAction];
   return {
     title: title(report),
     summary,
@@ -71,5 +67,7 @@ export function createPullRequestSummary(report: ValidationReport): PullRequestS
     impactedFiles: impact,
     risks,
     nextSteps,
+    verificationGaps: decision.verificationGaps,
+    reviewProgress: decision.progress,
   };
 }

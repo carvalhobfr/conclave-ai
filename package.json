@@ -1,6 +1,6 @@
 {
   "name": "conclave-ai",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Graph-aware independent validator for code changes and agent claims",
   "keywords": [
     "ai",
@@ -34,7 +34,8 @@
     "CHANGELOG.md",
     "CHANGELOG.pt-BR.md",
     "ROADMAP.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/product-0.9.md"
   ],
   "bin": {
     "conclave": "dist/cli.js"
@@ -65,7 +66,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc -p web/tsconfig.json --noEmit",
     "verify": "npm run typecheck && npm run lint && npm run build && npm test && npm run test:web && npm run eval && npm run eval:graph && npm run eval:release && npm run audit",
-    "eval:validation": "vitest run tests/git-change-set.test.ts tests/super-validator.test.ts tests/validation-web.test.ts --maxWorkers=1"
+    "eval:validation": "vitest run tests/git-change-set.test.ts tests/super-validator.test.ts tests/validation-web.test.ts --maxWorkers=1",
+    "eval:precision": "vitest run tests/escalation.test.ts tests/source-defects.test.ts tests/pr-summary.test.ts --maxWorkers=1"
   },
   "dependencies": {
     "ignore": "7.0.6",

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-function runRunner(objective: string): Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }> {
+function runRunner(objective: string, schemaVersion = 2): Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(process.execPath, [
       "skills/conclave-validate/scripts/run-validation.mjs",
@@ -14,7 +14,7 @@ function runRunner(objective: string): Promise<{ readonly code: number; readonly
     ], {
       cwd: resolve("."),
       shell: false,
-      env: { ...process.env, CONCLAVE_CLI_PATH: resolve("tests/fixtures/agent-skill/fake-conclave.mjs") },
+      env: { ...process.env, CONCLAVE_CLI_PATH: resolve("tests/fixtures/agent-skill/fake-conclave.mjs"), CONCLAVE_FIXTURE_SCHEMA: String(schemaVersion) },
       stdio: ["ignore", "pipe", "pipe"],
     });
     const stdout: Buffer[] = [];
@@ -70,5 +70,13 @@ describe("portable Conclave agent skill", () => {
     const result = await runRunner(_label);
     expect(result.code, result.stderr).toBe(exitCode);
     expect(JSON.parse(result.stdout)).toEqual(expect.objectContaining({ schemaVersion: 2, verdict }));
+  });
+});
+
+describe("v3 portable protocol", () => {
+  it.each(["valid small change", "BLOCK", "INCONCLUSIVE"])("preserves v3 verdict and exit for %s", async (objective) => {
+    const result = await runRunner(objective, 3);
+    expect(result.code, result.stderr).toBe(objective === "BLOCK" ? 1 : objective === "INCONCLUSIVE" ? 2 : 0);
+    expect(JSON.parse(result.stdout)).toEqual(expect.objectContaining({ schemaVersion: 3 }));
   });
 });

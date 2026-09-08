@@ -15,6 +15,7 @@ import { LocalHashEmbeddingProvider } from "../src/embeddings/local-hash-embeddi
 import { InMemoryCodeIndexStore } from "../src/indexing/in-memory-index-store.js";
 import { RepositoryIndexer } from "../src/indexing/repository-indexer.js";
 import { LocalFolderRepository } from "../src/repositories/local-folder-repository.js";
+import { finalizeReportDigest } from "../src/validation/review-lineage.js";
 import { SuperValidator } from "../src/validation/super-validator.js";
 
 async function validationFixture() {
@@ -137,7 +138,8 @@ describe("SuperValidator", () => {
       contract(),
     );
 
-    expect(report.schemaVersion).toBe(2);
+    expect(report.schemaVersion).toBe(3);
+    expect(report.metrics.deterministicChecks).toBeGreaterThan(report.findings.length);
     expect(report.lineage).toEqual(expect.objectContaining({
       contractStatus: "initial",
       baselineTrust: "none",
@@ -237,7 +239,7 @@ describe("SuperValidator", () => {
 
     expect(() => validator.validate(index, changeSet(), contract(), {
       previousReport: { schemaVersion: 2, lineage: {} } as never,
-    })).toThrow("Previous report is not a comparable Conclave schema v2 report");
+    })).toThrow("Previous report is not a comparable Conclave schema v2/v3 report");
   });
 
   it("rejects duplicate claim identities before creating lineage", async () => {
@@ -409,5 +411,20 @@ describe("SuperValidator", () => {
     expect(() => new SuperValidator().validate(nonDeterministic, changeSet(), contract())).toThrow(
       "requires deterministic local embeddings",
     );
+  });
+});
+
+describe("schema migration lineage", () => {
+  it("continues an authentic v2 report without silently changing its digest or contract", async () => {
+    const validator = new SuperValidator();
+    const index = await validationFixture();
+    const previous = finalizeReportDigest({ ...validator.validate(index, changeSet(), contract()), schemaVersion: 2, escalation: { recommended: false, dimensions: [{ dimension: "lifecycle-state", coverage: "checked-clean", reason: "Legacy check" }], reasons: [] } });
+    const digest = previous.lineage.reportDigest;
+    const current = validator.validate(index, changeSet(), contract(), { previousReport: previous });
+    expect(current.schemaVersion).toBe(3);
+    expect(current.lineage.contractStatus).toBe("preserved");
+    expect(current.lineage.previousReportDigest).toBe(digest);
+    expect(current.lineage.baselineTrust).toBe("unattested");
+    expect(previous.lineage.reportDigest).toBe(digest);
   });
 });

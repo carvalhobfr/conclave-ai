@@ -23,7 +23,7 @@ import type {
 import { createChallengePlan } from "./challenge-router.js";
 import { assessEscalation } from "./escalation.js";
 import { evaluateEvidenceReceipts } from "./evidence-receipts.js";
-import { findSourceDefects } from "./source-defects.js";
+import { analyzeSourceDefects } from "./source-defects.js";
 import {
   createFindingLifecycle,
   createValidationLineage,
@@ -305,6 +305,7 @@ export class SuperValidator {
       throw new Error("SuperValidator requires deterministic local embeddings for evidence-backed review");
     }
     const started = performance.now();
+    let deterministicChecks = 0;
     const findings: ValidationFinding[] = [];
     const changedPaths = new Set(changeSet.files.map((file) => file.path));
     const changedUnits = Object.values(index.units).filter((unit) => {
@@ -313,6 +314,7 @@ export class SuperValidator {
     });
     const changedSymbols = new Set(changedUnits.map((unit) => unit.symbol));
 
+    deterministicChecks += 1;
     if (changeSet.files.length === 0) {
       findings.push(finding(
         "no-change",
@@ -323,6 +325,7 @@ export class SuperValidator {
       ));
     }
 
+    deterministicChecks += 1;
     if (contract.objective.trim() === "") {
       findings.push(finding(
         "missing-objective",
@@ -334,6 +337,7 @@ export class SuperValidator {
     }
 
     if (contract.allowedPathPrefixes.length > 0) {
+      deterministicChecks += 1;
       const outside = changeSet.files.filter(
         (file) => !contract.allowedPathPrefixes.some((prefix) => pathMatchesPrefix(file.path, prefix)),
       );
@@ -352,6 +356,7 @@ export class SuperValidator {
     for (const changed of changeSet.files) {
       const file = index.files[changed.path];
       if (file !== undefined) {
+        deterministicChecks += 1;
         for (const diagnostic of file.diagnostics.slice(0, 20)) {
           findings.push(finding(
             "parser-diagnostic",
@@ -372,7 +377,9 @@ export class SuperValidator {
 
     // Text-visible defect classes the graph cannot express. These cost no model call, so the
     // free review path reports them too.
-    for (const defect of findSourceDefects(index, changeSet.files)) {
+    const sourceAnalysis = analyzeSourceDefects(index, changeSet.files);
+    deterministicChecks += sourceAnalysis.checksPerformed;
+    for (const defect of sourceAnalysis.defects) {
       findings.push(finding(
         defect.kind,
         "warning",
@@ -383,6 +390,7 @@ export class SuperValidator {
       ));
     }
 
+    deterministicChecks += 1;
     const deletedSource = changeSet.files.filter((changed) =>
       isSourceFile(changed.path) && !isTestFile(changed.path) && isDeletionOnly(changed));
     if (deletedSource.length > 0) {
@@ -416,6 +424,7 @@ export class SuperValidator {
       }
     }
 
+    deterministicChecks += 1;
     const outsideImpactEdges = impact.edges.filter((edge) => {
       const fromPath = unitPath(index, edge.from);
       const toPath = unitPath(index, edge.to);
@@ -437,6 +446,7 @@ export class SuperValidator {
       ));
     }
 
+    deterministicChecks += 1;
     const exportedChangedUnits = changedUnits.filter((unit) => unit.exported);
     const changedTests = changeSet.files.filter((file) => isTestFile(file.path));
     if (exportedChangedUnits.length > 0 && changedTests.length === 0) {
@@ -452,6 +462,7 @@ export class SuperValidator {
       ));
     }
 
+    deterministicChecks += 1;
     if (
       changeSet.files.some((file) => isSourceFile(file.path) && file.status !== "deleted") &&
       changedUnits.length === 0
@@ -469,6 +480,7 @@ export class SuperValidator {
       ));
     }
 
+    deterministicChecks += contract.claims.length;
     const claims = contract.claims.map((claim) => claimResult(index, changedPaths, claim));
     for (const result of claims) {
       if (result.outcome === "rejected") {
@@ -495,6 +507,7 @@ export class SuperValidator {
     }
 
     const effectivePrevious = context.newSeries === true ? undefined : context.previousReport;
+    deterministicChecks += 1;
     const lineage = createValidationLineage({
       changeSet,
       contract,
@@ -528,6 +541,7 @@ export class SuperValidator {
       changeSet.source.kind === "workspace" ||
       changeSet.source.kind === "staged";
     const receipts = evaluateEvidenceReceipts(context.receipts ?? [], lineage, changeSet.headSha, mutableSource);
+    deterministicChecks += receipts.items.length;
     for (const receipt of receipts.items) {
       if (receipt.status === "current") continue;
       const receiptKind = receipt.status === "stale"
@@ -571,7 +585,7 @@ export class SuperValidator {
       findings,
     );
     const report: ValidationReport = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       verdict,
       summary:
         verdict.toUpperCase() + ": " + String(counts.blocking) + " blocking, " +
@@ -597,13 +611,7 @@ export class SuperValidator {
         impactedFiles: impactedFiles.size,
         impactedSymbols: impactedSymbols.size,
         graphEdgesInspected: impact.edges.length,
-        deterministicChecks:
-          contract.claims.length +
-          findings.filter((item) =>
-            item.kind === "parser-diagnostic" ||
-            item.kind === "scope-expansion" ||
-            item.kind === "impact-outside-diff"
-          ).length,
+        deterministicChecks,
         durationMs: Math.max(0, performance.now() - started),
       },
       trustBoundary: {
@@ -624,7 +632,10 @@ export class SuperValidator {
       findingLifecycle,
       receipts,
       challengePlan,
-      escalation: assessEscalation(challengePlan, findings, claims),
+      escalation: assessEscalation(challengePlan, findings, claims, {
+        files: changeSet.files,
+        indexedPaths: new Set(Object.keys(index.files)),
+      }),
     };
     return finalizeReportDigest(report);
   }

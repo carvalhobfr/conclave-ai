@@ -6,7 +6,7 @@ const outcome = verdict === "block" ? "rejected" : verdict === "inconclusive" ? 
 const severity = verdict === "block" ? "blocking" : "warning";
 const findings = verdict === "pass" ? [] : [{ id: "finding", fingerprint: "fingerprint", kind: verdict === "block" ? "claim-contradicted" : "claim-inconclusive", severity, title: verdict, detail: verdict, evidence: [], remediation: "Fix or add evidence." }];
 process.stdout.write(JSON.stringify({
-  schemaVersion: 2,
+  schemaVersion: Number(process.env.CONCLAVE_FIXTURE_SCHEMA ?? 2),
   verdict,
   summary: verdict.toUpperCase(),
   objective,
@@ -54,6 +54,7 @@ process.stdout.write(JSON.stringify({
     stagnating: [],
   },
   receipts: { items: [], counts: { current: 0, stale: 0, invalid: 0, failed: 0, unbound: 0 } },
+  escalation: { recommended: false, dimensions: [], reasons: [] },
   challengePlan: [{ strategy: "baseline", reason: "Baseline", evidenceIds: [], suggestedProbes: [] }],
 }));
 process.exitCode = exit;

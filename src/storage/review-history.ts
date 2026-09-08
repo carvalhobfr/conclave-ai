@@ -30,7 +30,7 @@ async function readHistory(repositoryRoot: string): Promise<ReviewHistoryRecord[
       typeof item === "object" && item !== null && typeof (item as { id?: unknown }).id === "string",
     ).map((item) => {
       const reportVersion = (item as { report?: { schemaVersion?: unknown } }).report?.schemaVersion;
-      if (reportVersion === undefined || reportVersion === 2) return item;
+      if (reportVersion === undefined || reportVersion === 2 || reportVersion === 3) return item;
       return Object.fromEntries(
         Object.entries(item).filter(([key]) => key !== "report"),
       ) as unknown as ReviewHistoryRecord;

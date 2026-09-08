@@ -411,6 +411,8 @@ export function interfaceCopy(language: InterfaceLanguage) {
     claim: localized("CLAIM", "CLAIM", "AFIRMACIÓN")[language],
     prSummary: localized("PR summary", "Resumo do PR", "Resumen del PR")[language],
     verdict: localized("Verdict", "Veredito", "Veredicto")[language],
+    verificationGaps: localized("Still needs verification", "Ainda precisa de verificação", "Pendiente de verificación")[language],
+    reviewProgress: localized("Correction progress", "Progresso da correção", "Progreso de la corrección")[language],
     risks: localized("Risks", "Riscos", "Riesgos")[language],
     nextSteps: localized("Next steps", "Próximos passos", "Siguientes pasos")[language],
     nextForAgent: localized("Next for your coding agent", "Próximo passo para o seu coding agent", "Siguiente paso para tu agente de código")[language],

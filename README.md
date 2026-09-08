@@ -20,6 +20,9 @@
 
 ---
 
+> **0.9:** `0.9.0` introduces honest rule coverage and a decision-first report. Criteria editing, verified CI provenance, behavioral collection and team collaboration remain planned. See the [0.9 product plan](docs/product-0.9.md).
+
+
 Conclave sits after a code change and before approval. It compares the real Git change, maps the code around it, points to risks and evidence, and gives the next action to a developer, coding agent, or human reviewer.
 
 <p align="center"><img src="https://raw.githubusercontent.com/carvalhobfr/conclave-ai/master/docs/assets/conclave-pr-flow.svg" alt="A code change passes through Conclave context and evidence before human approval and merge" width="920"></p>
@@ -124,19 +127,16 @@ Conclave's structural parsers currently understand:
 
 Other text languages still appear in Git change and scope evidence, but do not yet receive the same code-unit graph depth. See [ROADMAP.md](ROADMAP.md).
 
-## When a model is worth its cost
+## When is a model worth the cost
 
-A review that costs nothing should not hand the decision to a model out of habit. Every report answers, deterministically and before any call is made, whether a model still has something to add.
-
-Conclave already derives the risk dimensions a change carries from the diff itself. The `escalation` field reports what the structural layer managed to do about each one:
+A review reports which narrow rules examined the change and which questions remain open. A rule finding, or the absence of one, never verifies an entire risk dimension.
 
 | Coverage | Meaning |
 | --- | --- |
-| `evidenced` | A deterministic check fired here. The answer is already in the findings. |
-| `checked-clean` | A check covers this class and found nothing. |
-| `unchecked` | No deterministic check covers this class at all. |
+| `partial` | Applicable rules examined only their declared scope. Read `checks` and `remainingQuestions`. |
+| `unchecked` | No applicable deterministic rule examined this dimension in the available source. |
 
-`recommended` is true only while something stays unanswered. Renaming a local helper leaves nothing open and needs no model. Touching an authorization boundary does, because no structural check can settle intent.
+`escalation.recommended` means further verification is warranted. Depending on the question, use relevant tests, human review or optional model reasoning. It never starts a model or runs a repository script. A model cannot replace runtime evidence. Historical v2 `evidenced` and `checked-clean` values remain readable with explicit limitations.
 
 ```bash
 conclave check . --json | jq '.report.escalation'

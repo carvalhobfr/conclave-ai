@@ -866,10 +866,10 @@ async function loadPreviousValidationReport(parsed: ParsedArguments): Promise<Va
     : value;
   if (
     typeof candidate !== "object" || candidate === null || Array.isArray(candidate) ||
-    (candidate as { schemaVersion?: unknown }).schemaVersion !== 2 ||
+    !([2, 3] as readonly unknown[]).includes((candidate as { schemaVersion?: unknown }).schemaVersion) ||
     typeof (candidate as { lineage?: unknown }).lineage !== "object"
   ) {
-    throw new Error("Previous report must be a Conclave schema v2 report or a check JSON object containing one");
+    throw new Error("Previous report must be a Conclave schema v2/v3 report or a check JSON object containing one");
   }
   return candidate as ValidationReport;
 }
@@ -1061,6 +1061,11 @@ async function pullRequestSummary(
       console.log(`\n${copy.risks}:`);
       for (const risk of summary.risks) console.log(`- ${risk}`);
     }
+    if ((summary.verificationGaps?.length ?? 0) > 0) {
+      console.log(`\n${copy.verificationGaps}:`);
+      for (const gap of summary.verificationGaps ?? []) console.log(`- ${gap}`);
+    }
+    console.log(`\n${copy.reviewProgress}: ${summary.reviewProgress ?? ""}`);
     console.log(`\n${copy.nextSteps}:`);
     for (const step of summary.nextSteps) console.log(`- ${step}`);
       console.log(`\n${copy.nextForAgent}:`);

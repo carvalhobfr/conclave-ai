@@ -20,6 +20,9 @@
 
 ---
 
+> **0.9:** `0.9.0` introduz cobertura explícita das regras e um relatório voltado à decisão. Editor de critérios, procedência verificada do CI, coleta comportamental e colaboração de equipes continuam planejados. Veja o [plano da 0.9](docs/product-0.9.md).
+
+
 Conclave entra depois da mudança de código e antes da aprovação. Ele compara o Git real, mapeia o código ao redor, aponta riscos e evidências e entrega a próxima ação para o desenvolvedor, coding agent ou revisor humano.
 
 <p align="center"><img src="https://raw.githubusercontent.com/carvalhobfr/conclave-ai/master/docs/assets/conclave-pr-flow.svg" alt="Uma mudança passa pelo contexto e pelas evidências do Conclave antes da aprovação humana e do merge" width="920"></p>
@@ -107,7 +110,7 @@ O review é uma análise determinística de código, não uma resposta de chat.
 1. O Git fornece a comparação e o patch exatos.
 2. Parsers locais identificam arquivos e **unidades de código**: funções, métodos, classes, interfaces e módulos nomeados. A documentação antiga chamava isso de “símbolos”.
 3. Um grafo acompanha imports, exports, chamadas, referências, containers e consumidores.
-4. Checks determinísticos desafiam escopo, mudança pública sem teste alterado, erro visível ao parser, impacto fora do diff, deleções e claims opcionais. Defeitos visíveis no próprio texto alterado saem do mesmo jeito: recurso que a mudança adquire e o projeto nunca libera, erro jogado fora por um `catch` vazio e armazenamento endereçado por literal onde o mesmo arquivo usa uma constante nomeada.
+4. Checks determinísticos desafiam escopo, mudança pública sem teste alterado, erro visível ao parser, impacto fora do diff, deleções e claims opcionais. Defeitos visíveis no próprio texto alterado saem do mesmo jeito: recurso sem candidato de limpeza correspondente no mesmo arquivo, erro jogado fora por um `catch` vazio e armazenamento endereçado por literal onde o mesmo arquivo usa uma constante nomeada.
 5. Conclave retorna `PASS`, `WARN`, `BLOCK` ou `INCONCLUSIVE`, com arquivo e linha sempre que houver evidência disponível.
 
 Nenhum código é enviado a uma LLM durante o review. Não precisa de chave de API. Isso é evidência útil, não compilador, test runner, scanner de segurança, prova de runtime nem aprovação automática. A autoridade do merge continua humana.
@@ -124,17 +127,14 @@ Outras linguagens textuais ainda entram no diff e no controle de escopo, mas sem
 
 ## Quando vale gastar um modelo
 
-Um review que não custa nada não deveria entregar a decisão a um modelo por hábito. Todo relatório responde, de forma determinística e antes de qualquer chamada, se ainda sobrou algo para o modelo fazer.
-
-O Conclave já deriva do próprio diff as dimensões de risco que a mudança carrega. O campo `escalation` informa o que a camada estrutural conseguiu fazer sobre cada uma:
+O review informa quais regras restritas examinaram a mudança e quais perguntas continuam abertas. Um achado, ou sua ausência, nunca verifica uma dimensão inteira de risco.
 
 | Cobertura | Significado |
 | --- | --- |
-| `evidenced` | Uma checagem determinística disparou aqui. A resposta já está nos achados. |
-| `checked-clean` | Existe checagem para essa classe e ela não encontrou nada. |
-| `unchecked` | Nenhuma checagem determinística cobre essa classe. |
+| `partial` | Regras aplicáveis examinaram apenas seu escopo declarado. Consulte `checks` e `remainingQuestions`. |
+| `unchecked` | Nenhuma regra determinística aplicável examinou a dimensão no código disponível. |
 
-`recommended` só é verdadeiro enquanto algo continua sem resposta. Renomear um helper local não deixa nada em aberto e dispensa modelo. Mexer em uma fronteira de autorização, não: nenhuma checagem estrutural resolve intenção.
+`escalation.recommended` indica que há verificação pendente. Conforme a pergunta, use testes relevantes, revisão humana ou raciocínio opcional de modelo. Isso nunca inicia um modelo nem executa scripts do repositório. Um modelo não substitui evidência de execução. Valores históricos v2 `evidenced` e `checked-clean` continuam legíveis com limitações explícitas.
 
 ```bash
 conclave check . --json | jq '.report.escalation'

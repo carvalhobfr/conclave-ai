@@ -4,6 +4,27 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.9.0] — 2026-09-08
+
+### Adicionado
+
+- Cockpit com próxima ação, achados que exigem atenção, verificação pendente, progresso das correções e acesso ao diff e handoff.
+- Schema v3 com escopo, aplicabilidade, arquivos e perguntas abertas por regra. CLI e handoff preservam as mesmas lacunas de evidência.
+- Plano incremental da 0.9 e suíte reproduzível `eval:precision`.
+
+### Alterado
+
+- O contador inclui verificações sem achados; o cabeçalho adapta caminhos longos à tela pequena.
+
+- Checks de código usam a árvore sintática, ignoram comentários e strings e reconhecem chamadas multilinha. Candidatos de limpeza precisam corresponder ao listener, intervalo ou assinatura no mesmo arquivo; isso não prova execução do teardown.
+- Observações de chaves distinguem os armazenamentos. Catch vazio considera mudanças em seu corpo.
+- PASS e claims estruturais deixam de sugerir entrega comportamental comprovada na interface.
+- Relatórios novos usam schema v3 com cobertura parcial/não examinada. Schema v2, histórico e rechecagem por digest continuam aceitos, com limitações explícitas. Consumidores restritos a v2 precisam aceitar v3.
+
+### Escopo
+
+- Editor de critérios, attestations verificadas do CI, coleta de runtime e colaboração hospedada continuam planejados para minors posteriores. O motor de review não chama modelos nem executa scripts do repositório.
+
 ## [0.8.0] — 2026-08-18
 
 A primeira versão da linha de companion de PR a chegar ao npm. A versão publicada anteriormente é a `0.2.8`.

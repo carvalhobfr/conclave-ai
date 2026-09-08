@@ -1,11 +1,8 @@
+import ts from "typescript";
+
 import type { RepositoryCodeIndex } from "../domain/code-index.js";
 import type { ValidationChangedFile, ValidationEvidence } from "../domain/validation.js";
 
-/**
- * Defect classes that are visible in the changed text itself, so they need no model call.
- * Each one is a pattern a reviewer applies by eye; running it here makes the result
- * reproducible, free, and available offline.
- */
 export interface SourceDefect {
   readonly kind: "unreleased-resource" | "discarded-error" | "inconsistent-key";
   readonly title: string;
@@ -14,154 +11,155 @@ export interface SourceDefect {
   readonly evidence: ValidationEvidence;
 }
 
-/** Acquire/release pairs whose release is a distinct, greppable identifier. */
-const RESOURCE_PAIRS: readonly { readonly acquire: string; readonly release: string }[] = [
-  { acquire: "addEventListener", release: "removeEventListener" },
-  { acquire: "setInterval", release: "clearInterval" },
-  { acquire: "subscribe", release: "unsubscribe" },
-  { acquire: "createReadStream", release: "close" },
-  { acquire: "watch", release: "unwatch" },
-];
-
-/** Keyed accessors whose calls in one file are expected to address the same store. */
-const KEYED_ACCESSORS = /\.(?:setItem|getItem|removeItem)\s*\(\s*([^,)]+?)\s*[,)]/gu;
-
 const JS_FAMILY = /\.(?:[cm]?[jt]sx?)$/iu;
 
-function changedLineNumbers(file: ValidationChangedFile, totalLines: number): readonly number[] {
-  if (file.hunks.length === 0) {
-    return file.status === "added" ? Array.from({ length: totalLines }, (_, index) => index + 1) : [];
+function intersects(node: ts.Node, source: ts.SourceFile, file: ValidationChangedFile, includeDeletions = false): boolean {
+  if (file.status === "added") return true;
+  const start = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  const end = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
+  return file.hunks.some((hunk) => (hunk.newCount > 0 || includeDeletions) && start < hunk.newStart + Math.max(1, hunk.newCount) && end >= hunk.newStart);
+}
+
+function method(call: ts.CallExpression): string {
+  return ts.isPropertyAccessExpression(call.expression) ? call.expression.name.text
+    : ts.isIdentifier(call.expression) ? call.expression.text : "";
+}
+
+function receiver(call: ts.CallExpression, source: ts.SourceFile): string {
+  return ts.isPropertyAccessExpression(call.expression) ? call.expression.expression.getText(source) : "";
+}
+
+function identity(node: ts.Node | undefined, source: ts.SourceFile): string | undefined {
+  if (node === undefined) return undefined;
+  if (ts.isStringLiteralLike(node)) return JSON.stringify(node.text);
+  // Inline callbacks create different function objects even when their source text matches.
+  if (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node)) return node.getText(source);
+  return undefined;
+}
+
+function binding(call: ts.CallExpression, source: ts.SourceFile): string | undefined {
+  const parent = call.parent;
+  if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) return parent.name.text;
+  if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && parent.right === call) {
+    return identity(parent.left, source);
   }
-  const lines = new Set<number>();
-  for (const hunk of file.hunks) {
-    const count = Math.max(0, hunk.newCount);
-    for (let offset = 0; offset < count; offset += 1) lines.add(hunk.newStart + offset);
-  }
-  return [...lines].sort((left, right) => left - right);
+  return undefined;
 }
 
-/** Strips string and comment bodies so a pattern never matches inside prose. */
-function withoutLiterals(line: string): string {
-  return line
-    .replace(/\/\/.*$/u, "")
-    .replace(/(["'`])(?:\\.|(?!\1)[^\\])*\1/gu, '""');
-}
-
-function evidenceFor(path: string, line: number, reason: string): ValidationEvidence {
-  return { path, startLine: line, endLine: line, reason };
-}
-
-function unreleasedResources(
-  index: RepositoryCodeIndex,
-  file: ValidationChangedFile,
-  lines: readonly string[],
-  changed: readonly number[],
-): readonly SourceDefect[] {
-  // A release call anywhere in the project counts: cleanup often lives in another module.
-  const projectText = Object.values(index.files).map((entry) => entry.sourceText).join("\n");
-  const defects: SourceDefect[] = [];
-  for (const line of changed) {
-    const text = withoutLiterals(lines[line - 1] ?? "");
-    for (const pair of RESOURCE_PAIRS) {
-      if (!new RegExp(`\\b${pair.acquire}\\s*\\(`, "u").test(text)) continue;
-      if (new RegExp(`\\b${pair.release}\\s*\\(`, "u").test(projectText)) continue;
-      defects.push({
-        kind: "unreleased-resource",
-        title: "Changed code acquires a resource the project never releases",
-        detail: `${pair.acquire} is called on a changed line, but ${pair.release} appears nowhere in the indexed project, so the resource is never released.`,
-        remediation: `Call ${pair.release} on the matching teardown path, or record why this registration is intentionally permanent.`,
-        evidence: evidenceFor(file.path, line, `${pair.acquire} without a matching ${pair.release}`),
-      });
+function capture(call: ts.CallExpression): string {
+  const options = call.arguments[2];
+  if (options === undefined || options.kind === ts.SyntaxKind.FalseKeyword) return "false";
+  if (options.kind === ts.SyntaxKind.TrueKeyword) return "true";
+  if (ts.isObjectLiteralExpression(options)) {
+    const property = options.properties.find((item) => ts.isPropertyAssignment(item) && item.name.getText() === "capture");
+    if (property === undefined) return "false";
+    if (ts.isPropertyAssignment(property)) {
+      if (property.initializer.kind === ts.SyntaxKind.TrueKeyword) return "true";
+      if (property.initializer.kind === ts.SyntaxKind.FalseKeyword) return "false";
     }
   }
-  return defects;
+  return "unknown";
 }
 
-function discardedErrors(
-  file: ValidationChangedFile,
-  lines: readonly string[],
-  changed: readonly number[],
-): readonly SourceDefect[] {
-  const defects: SourceDefect[] = [];
-  const changedSet = new Set(changed);
-  for (const line of changed) {
-    const text = withoutLiterals(lines[line - 1] ?? "");
-    const match = /\bcatch\s*(?:\([^)]*\))?\s*\{(.*)$/u.exec(text);
-    if (match === null) continue;
-    // The body is empty when the brace closes with nothing but whitespace between, either on
-    // this line or across the following lines up to the closing brace.
-    let body = match[1] ?? "";
-    let cursor = line;
-    while (!body.includes("}") && cursor < lines.length) {
-      cursor += 1;
-      body += `\n${withoutLiterals(lines[cursor - 1] ?? "")}`;
-    }
-    const inner = body.slice(0, body.indexOf("}"));
-    if (inner.trim() !== "") continue;
-    if (!changedSet.has(line)) continue;
-    defects.push({
-      kind: "discarded-error",
-      title: "Changed code discards a caught error",
-      detail: "A catch block introduced or modified by this change has an empty body, so the failure it catches leaves no trace.",
-      remediation: "Handle, rethrow, or record the error, or state in the code why discarding it is correct.",
-      evidence: evidenceFor(file.path, line, "catch block with an empty body"),
-    });
+function once(call: ts.CallExpression): boolean {
+  const options = call.arguments[2];
+  return options !== undefined && ts.isObjectLiteralExpression(options) && options.properties.some((property) =>
+    ts.isPropertyAssignment(property) && property.name.getText() === "once" && property.initializer.kind === ts.SyntaxKind.TrueKeyword);
+}
+
+function hasCleanup(call: ts.CallExpression, calls: readonly ts.CallExpression[], source: ts.SourceFile): boolean {
+  const name = method(call);
+  if (name === "addEventListener") {
+    if (once(call)) return true;
+    const event = identity(call.arguments[0], source);
+    const handler = identity(call.arguments[1], source);
+    return event !== undefined && handler !== undefined && capture(call) !== "unknown" && calls.some((other) =>
+      method(other) === "removeEventListener" && receiver(other, source) === receiver(call, source) &&
+      identity(other.arguments[0], source) === event && identity(other.arguments[1], source) === handler &&
+      capture(other) === capture(call));
   }
-  return defects;
+  const target = binding(call, source);
+  if (target === undefined) return false;
+  if (name === "setInterval") return calls.some((other) => method(other) === "clearInterval" && identity(other.arguments[0], source) === target);
+  return calls.some((other) => method(other) === "unsubscribe" && receiver(other, source) === target);
 }
 
-function inconsistentKeys(
-  file: ValidationChangedFile,
-  source: string,
-  lines: readonly string[],
-  changed: readonly number[],
-): readonly SourceDefect[] {
-  const constants: { readonly line: number; readonly key: string }[] = [];
-  const literals: { readonly line: number; readonly key: string }[] = [];
-  lines.forEach((raw, index) => {
-    const text = withoutLiterals(raw) === raw ? raw : raw;
-    for (const match of text.matchAll(KEYED_ACCESSORS)) {
-      const key = match[1]?.trim();
-      if (key === undefined || key === "") continue;
-      const entry = { line: index + 1, key };
-      if (/^["'`]/u.test(key)) literals.push(entry);
-      else if (/^[A-Za-z_$][\w$]*$/u.test(key)) constants.push(entry);
-    }
-  });
-  if (constants.length === 0 || literals.length === 0) return [];
-  const changedSet = new Set(changed);
-  const named = [...new Set(constants.map((entry) => entry.key))].join(", ");
-  return literals
-    .filter((entry) => changedSet.has(entry.line))
-    // A literal that repeats a constant's declared value is consistent, only spelled out.
-    .filter((entry) => !new RegExp(`\\b(?:${named.split(", ").join("|")})\\s*=\\s*${entry.key.replace(/[.*+?^$()|[\]\\]/gu, "\\$&")}`, "u").test(source))
-    .map((entry) => ({
-      kind: "inconsistent-key" as const,
-      title: "Changed code addresses a store with a different key expression",
-      detail: `This call keys the store with the literal ${entry.key}, while the same file keys it with ${named}. If they do not resolve to the same value the read, write, and delete paths disagree.`,
-      remediation: `Use ${named} here, or state why this call intentionally addresses a different key.`,
-      evidence: evidenceFor(file.path, entry.line, `keyed with ${entry.key} instead of ${named}`),
-    }));
+function defect(file: ValidationChangedFile, source: ts.SourceFile, node: ts.Node, details: Omit<SourceDefect, "evidence">): SourceDefect {
+  const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  return { ...details, evidence: { path: file.path, startLine: line, endLine: line, reason: details.title } };
 }
 
-/** Finds text-visible defects on the changed lines of every indexed JavaScript-family file. */
-export function findSourceDefects(
-  index: RepositoryCodeIndex,
-  files: readonly ValidationChangedFile[],
-): readonly SourceDefect[] {
+function storageIdentity(call: ts.CallExpression, source: ts.SourceFile): string | undefined {
+  const name = receiver(call, source);
+  return /^(?:(?:window|globalThis)\.)?(?:localStorage|sessionStorage)$/u.test(name)
+    ? name.replace(/^(?:window|globalThis)\./u, "") : undefined;
+}
+
+/** Syntax-only observations. Absence of a finding never proves runtime correctness. */
+export function analyzeSourceDefects(index: RepositoryCodeIndex, files: readonly ValidationChangedFile[]): { readonly defects: readonly SourceDefect[]; readonly checksPerformed: number } {
   const defects: SourceDefect[] = [];
+  let checksPerformed = 0;
   for (const file of files) {
     if (file.status === "deleted" || !JS_FAMILY.test(file.path)) continue;
     const indexed = index.files[file.path];
     if (indexed === undefined) continue;
-    const lines = indexed.sourceText.split("\n");
-    const changed = changedLineNumbers(file, lines.length);
-    if (changed.length === 0) continue;
-    defects.push(
-      ...unreleasedResources(index, file, lines, changed),
-      ...discardedErrors(file, lines, changed),
-      ...inconsistentKeys(file, indexed.sourceText, lines, changed),
-    );
+    if (file.status !== "added" && file.hunks.length === 0) continue;
+    checksPerformed += 3; // resource candidates, storage keys, and empty catches for this file.
+    const source = ts.createSourceFile(file.path, indexed.sourceText, ts.ScriptTarget.Latest, true);
+    const calls: ts.CallExpression[] = [];
+    const catches: ts.CatchClause[] = [];
+    const constants = new Map<string, string>();
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node)) calls.push(node);
+      if (ts.isCatchClause(node)) catches.push(node);
+      // Only top-level literal constants are resolved; scoped aliases require semantic analysis.
+      if (ts.isVariableStatement(node) && node.parent === source && (node.declarationList.flags & ts.NodeFlags.Const) !== 0) {
+        for (const declaration of node.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name) && declaration.initializer !== undefined && ts.isStringLiteralLike(declaration.initializer)) {
+            constants.set(declaration.name.text, declaration.initializer.text);
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    for (const call of calls.filter((node) => intersects(node, source, file))) {
+      const name = method(call);
+      if (["addEventListener", "setInterval", "subscribe"].includes(name) && !hasCleanup(call, calls, source)) {
+        defects.push(defect(file, source, call, {
+          kind: "unreleased-resource",
+          title: "Changed resource has no matching cleanup candidate in this file",
+          detail: `${name} has no syntactically matching cleanup candidate in this file. Cleanup may be delegated or the registration may be intentionally permanent; runtime lifetime is not proven by this check.`,
+          remediation: "Check the resource lifetime and its matching teardown path. Add cleanup if required, or document the delegated or permanent lifetime.",
+        }));
+      }
+      const store = storageIdentity(call, source);
+      const key = call.arguments[0];
+      if (store === undefined || !["setItem", "getItem", "removeItem"].includes(name) || key === undefined || !ts.isStringLiteralLike(key)) continue;
+      const named = calls.filter((other) => storageIdentity(other, source) === store && ["setItem", "getItem", "removeItem"].includes(method(other)))
+        .map((other) => other.arguments[0]).filter((argument): argument is ts.Identifier => argument !== undefined && ts.isIdentifier(argument))
+        .map((argument) => argument.text).filter((identifier) => constants.has(identifier));
+      if (named.length === 0 || named.some((identifier) => constants.get(identifier) === key.text)) continue;
+      defects.push(defect(file, source, call, {
+        kind: "inconsistent-key",
+        title: "Changed storage call uses a different key from named keys in this file",
+        detail: `${store} uses ${JSON.stringify(key.text)} here and also uses ${[...new Set(named)].join(", ")}. These may intentionally be separate entries; this is a key-consistency review signal.`,
+        remediation: "Confirm the intended storage entry. Reuse its named key when these paths should address the same value.",
+      }));
+    }
+    for (const clause of catches) {
+      if (clause.block.statements.length > 0 || !intersects(clause, source, file, true)) continue;
+      defects.push(defect(file, source, clause, {
+        kind: "discarded-error",
+        title: "Changed code has an empty catch block",
+        detail: "This catch block contains no statements. The syntax shows that the error is ignored here; whether that is intentional requires review.",
+        remediation: "Handle, rethrow or record the error, or document why ignoring this failure is correct.",
+      }));
+    }
   }
-  return defects;
+  return { defects, checksPerformed };
+}
+
+export function findSourceDefects(index: RepositoryCodeIndex, files: readonly ValidationChangedFile[]): readonly SourceDefect[] {
+  return analyzeSourceDefects(index, files).defects;
 }

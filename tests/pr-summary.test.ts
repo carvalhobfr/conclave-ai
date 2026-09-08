@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { createReviewDecision } from "../src/domain/review-decision.js";
+import { createReviewHandoff } from "../src/domain/review-handoff.js";
 import { createPullRequestSummary } from "../src/domain/pr-summary.js";
 import type { ValidationReport } from "../src/domain/validation.js";
 
@@ -73,5 +75,43 @@ describe("pull request summaries", () => {
     }));
     expect(result.risks).toEqual(["BLOCKING: Claim contradicted"]);
     expect(result.nextSteps[0]).toContain("blocking findings");
+  });
+});
+
+describe("delivery decisions", () => {
+  it("keeps a structural PASS separate from unverified delivery and exposes the same gaps in each surface", () => {
+    const current = report({ schemaVersion: 3, escalation: { recommended: true, dimensions: [], reasons: ["Verify persistence after reload."] } });
+    const decision = createReviewDecision(current);
+    expect(decision.headline).toBe("No deterministic blocker or warning found");
+    expect(decision.verificationGaps).toContain("Verify persistence after reload.");
+    expect(decision.verificationGaps.some((gap) => gap.includes("No explicit acceptance claims"))).toBe(true);
+    expect(decision.verificationGaps.some((gap) => gap.includes("No current test or runtime receipt"))).toBe(true);
+    expect(createPullRequestSummary(current).verificationGaps).toEqual(decision.verificationGaps);
+    for (const gap of decision.verificationGaps) expect(createReviewHandoff(current).prompt).toContain(gap);
+    expect(current.verdict).toBe("pass");
+  });
+  it("labels historical clean coverage as limited rather than proven", () => {
+    const current = report({ escalation: { recommended: false, reasons: [], dimensions: [{ dimension: "data-integrity", coverage: "checked-clean", reason: "Historical clean." }] } });
+    expect(createReviewDecision(current).verificationGaps[0]).toContain("Historical report");
+  });
+  it("does not manufacture work when no files changed", () => {
+    const base = report();
+    const decision = createReviewDecision({ ...base, changeSet: { ...base.changeSet, files: [] } });
+    expect(decision.headline).toBe("Nothing to review");
+    expect(decision.verificationGaps).toEqual([]);
+  });
+  it.each(["failed", "stale", "invalid", "unbound", "current"] as const)("retains %s receipt limitations", (status) => {
+    const base = report();
+    const decision = createReviewDecision({ ...base, receipts: { ...base.receipts, items: [{ id: "integration", receiptDigest: "receipt_x", type: "test", status, claimedTrustLevel: "ci-attested", effectiveTrustLevel: "self-reported", reasons: ["Fixture reason"] }] } });
+    expect(decision.verificationGaps.some((gap) => gap.includes(status === "current" ? "provenance remains self-reported" : `${status} evidence cannot verify`))).toBe(true);
+    expect(decision.headline).not.toContain("verified");
+  });
+  it("keeps rebaseline above correction progress and does not describe disappearance as proof of a fix", () => {
+    const base = report();
+    const current = { ...base, lineage: { ...base.lineage, previousReviewId: "older" }, findingLifecycle: { ...base.findingLifecycle, progress: "progress" as const, resolved: ["fingerprint-old"] } };
+    expect(createReviewDecision(current).progress).toContain("1 finding(s) no longer detected");
+    const changed = { ...current, lineage: { ...current.lineage, rebaselineRequired: true } };
+    expect(createReviewDecision(changed).nextAction).toContain("Confirm the changed objective");
+    expect(createReviewDecision(changed).progress).toContain("not comparable");
   });
 });

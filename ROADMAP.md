@@ -45,9 +45,19 @@ Conclave is a read-only PR companion. The product gathers context and evidence, 
 - Agent protocol through `--previous-report`, repeatable `--receipt`, `--series`, `--new-series`, and schema-v2 JSON.
 - Correction handoffs that expose lineage, progress, receipts, selected challenges, and rebaseline requirements.
 
-## After 0.7
+## 0.8 — Local review and escalation — implemented
 
-Future milestones are ordered by dependency and tracked by evidence rather than dates. They are planned, not implemented. Existing provider types, environment-driven local runtime paths, or partial adapters do not satisfy a milestone by themselves. All designs remain clean-room, and no milestone expands Conclave beyond its read-only evidence and review authority.
+- Zero-model-call source checks and deterministic escalation signals.
+- Local CLI, cockpit, portable skills, correction lineage and GitHub workflow.
+- Existing coverage is structural and heuristic; it is not proof of delivery behavior.
+
+## 0.9 — Delivery evidence — in progress
+
+The active product sequence is [Conclave 0.9](docs/product-0.9.md): honest coverage and a decision-first report, confirmed acceptance criteria, CI-bound evidence, behavioral evidence, then pilot evaluation. The first increment is `0.9.0`; later increments remain planned until their acceptance gates pass. Provider expansion follows demonstrated user needs.
+
+## Longer-term capability backlog
+
+The capability descriptions below are retained as a backlog, not the current delivery order. The 0.9 product plan above takes priority. They are planned, not implemented. Existing provider types, environment-driven local runtime paths, or partial adapters do not satisfy a milestone by themselves. All designs remain clean-room; evidence collection remains explicitly scoped and review authority remains read-only.
 
 ### Milestone 1 — Local-first provider experience — planned
 
