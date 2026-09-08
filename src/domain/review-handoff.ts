@@ -28,6 +28,7 @@ export function createReviewHandoff(report: ValidationReport): ReviewHandoff {
     `Review series: ${report.lineage.seriesId}`,
     `Contract status: ${report.lineage.contractStatus}`,
     `Finding progress: ${report.findingLifecycle.progress}`,
+    ...((report.criteria ?? []).flatMap((item) => [`Criterion ${item.criterion.id}: ${item.criterion.statement}`, `Status: ${item.status}; previous: ${item.previousStatus ?? "initial"}`, `Verification plan: ${item.criterion.verificationPlan}`, `Criterion digest: ${item.digest}`])),
     `Next action: ${decision.nextAction}`,
     `Correction comparison: ${decision.progress}`,
     "",

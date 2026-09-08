@@ -70,7 +70,7 @@ function assertComparableReport(value: ValidationReport): void {
       (occurrence["consecutive"] as number) >= 1;
   });
   if (
-    (report?.["schemaVersion"] !== 2 && report?.["schemaVersion"] !== 3) ||
+    (report?.["schemaVersion"] !== 2 && report?.["schemaVersion"] !== 3 && report?.["schemaVersion"] !== 4) ||
     typeof lineage?.["seriesId"] !== "string" ||
     typeof lineage["reviewId"] !== "string" ||
     typeof lineage["reportDigest"] !== "string" ||
@@ -83,7 +83,7 @@ function assertComparableReport(value: ValidationReport): void {
     !Array.isArray(lifecycle?.["seen"]) ||
     !lifecycle["seen"].every((item) => typeof item === "string")
   ) {
-    throw new Error("Previous report is not a comparable Conclave schema v2/v3 report");
+    throw new Error("Previous report is not a comparable Conclave schema v2/v3/v4 report");
   }
 }
 
@@ -93,6 +93,7 @@ function normalizedContract(contract: ValidationContract): ValidationContract {
   )?.id;
   if (duplicateClaimId !== undefined) throw new Error("Validation contract contains a duplicate claim id: " + duplicateClaimId);
   return {
+    ...(contract.criteria === undefined ? {} : { criteria: [...contract.criteria].sort((a, b) => a.id.localeCompare(b.id)) }),
     objective: contract.objective.trim(),
     allowedPathPrefixes: [...new Set(contract.allowedPathPrefixes.map((path) =>
       path.replaceAll("\\", "/").replace(/^\.\//u, "").replace(/\/$/u, ""),
@@ -110,10 +111,10 @@ export function contractSnapshot(contract: ValidationContract): ValidationContra
   const normalized = normalizedContract(contract);
   return {
     allowedPathPrefixes: normalized.allowedPathPrefixes,
-    claims: normalized.claims.map((claim) => ({
-      id: claim.id,
-      digest: validationDigest("claim", claim),
-    })),
+    claims: [
+      ...normalized.claims.map((claim) => ({ id: claim.id, digest: validationDigest("claim", claim) })),
+      ...(normalized.criteria ?? []).map((item) => ({ id: "criterion:" + item.id, digest: validationDigest("criterion", item) })),
+    ],
   };
 }
 

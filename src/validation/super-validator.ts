@@ -23,6 +23,7 @@ import type {
 import { createChallengePlan } from "./challenge-router.js";
 import { assessEscalation } from "./escalation.js";
 import { evaluateEvidenceReceipts } from "./evidence-receipts.js";
+import { evaluateCriteria } from "./acceptance-criteria.js";
 import { analyzeSourceDefects } from "./source-defects.js";
 import {
   createFindingLifecycle,
@@ -585,7 +586,8 @@ export class SuperValidator {
       findings,
     );
     const report: ValidationReport = {
-      schemaVersion: 3,
+      schemaVersion: 4,
+      criteria: evaluateCriteria(contract.criteria ?? [], claims, receipts, lineage.rebaselineRequired ? undefined : effectivePrevious),
       verdict,
       summary:
         verdict.toUpperCase() + ": " + String(counts.blocking) + " blocking, " +

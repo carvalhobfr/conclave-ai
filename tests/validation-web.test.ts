@@ -114,3 +114,30 @@ describe("web validation workflow", () => {
     }
   });
 });
+
+it("retains saved criteria through a reopened project and compares rechecks", async () => {
+  const root = await mkdtemp(join(tmpdir(), "conclave-criteria-flow-"));
+  try {
+    await mkdir(join(root, "src"));
+    await writeFile(join(root, "src", "feature.ts"), "export const feature = false;\n");
+    await git(root, ["init", "-b", "master"]);
+    await git(root, ["add", "src/feature.ts"]);
+    await git(root, ["commit", "-m", "baseline"]);
+    const firstService = new ConclaveProductService({ allowedRoot: root });
+    const firstProject = await firstService.openLocal(root);
+    const contract = { objective: "Keep preference", claims: [], allowedPathPrefixes: [], criteria: [{ id: "persist", statement: "Survives reload", verificationPlan: "Save and reload", kind: "runtime", confirmed: true, claimIds: [], implementationPaths: ["src/feature.ts"] }] };
+    await firstService.saveAcceptance(firstProject.id, contract, null);
+    const product = new ConclaveProductService({ allowedRoot: root });
+    const project = await product.openLocal(root);
+    expect((await product.acceptance(project.id))?.contract).toEqual(contract);
+    await writeFile(join(root, "src", "feature.ts"), "export const feature = true;\n");
+    const initial = await product.validate(project.id, { kind: "working" }, contract.objective);
+    expect(initial.report.criteria?.[0]?.status).toBe("not-verified");
+    const receipt = { version: 1, receipts: [{ id: "reload-check", type: "runtime", command: "reload scenario", runner: "local", exitCode: 0, startedAt: "2026-09-08T00:00:00Z", finishedAt: "2026-09-08T00:01:00Z", outputDigest: "a".repeat(64), diffDigest: initial.report.lineage.diffDigest, criterionDigests: { persist: initial.report.criteria?.[0]?.digest } }] };
+    const recheck = await product.validate(project.id, { kind: "working" }, contract.objective, undefined, { previousReviewId: initial.report.lineage.reviewId, receipts: receipt });
+    expect(recheck.report.criteria?.[0]).toMatchObject({ status: "supported", previousStatus: "not-verified" });
+    expect(recheck.handoff).toContain("Survives reload");
+    expect(recheck.report.lineage.contractStatus).toBe("preserved");
+    expect((await product.history(project.id)).length).toBe(2);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

@@ -64,8 +64,28 @@ export interface ValidationClaim {
   readonly check: ValidationClaimCheck;
 }
 
+export interface AcceptanceCriterion {
+  readonly id: string;
+  readonly statement: string;
+  readonly verificationPlan: string;
+  readonly kind: "structural" | "test" | "runtime" | "human";
+  readonly confirmed: boolean;
+  readonly claimIds: readonly string[];
+  readonly implementationPaths: readonly string[];
+}
+
+export interface CriterionResult {
+  readonly criterion: AcceptanceCriterion;
+  readonly digest: string;
+  readonly status: "supported" | "contradicted" | "not-verified" | "human-decision";
+  readonly reasons: readonly string[];
+  readonly receiptIds: readonly string[];
+  readonly previousStatus?: CriterionResult["status"];
+}
+
 export interface ValidationContract {
   readonly objective: string;
+  readonly criteria?: readonly AcceptanceCriterion[];
   readonly claims: readonly ValidationClaim[];
   readonly allowedPathPrefixes: readonly string[];
 }
@@ -226,6 +246,7 @@ export interface EvidenceReceiptInput {
   readonly artifactDigest?: string;
   readonly diffDigest?: string;
   readonly outputDigest?: string;
+  readonly criterionDigests?: Readonly<Record<string, string>>;
   readonly artifactDigests?: readonly string[];
   readonly runner?: string;
   readonly claimedTrustLevel?: EvidenceReceiptClaimedTrust;
@@ -248,6 +269,7 @@ export interface ValidatedEvidenceReceipt {
   readonly artifactDigest?: string;
   readonly diffDigest?: string;
   readonly outputDigest?: string;
+  readonly criterionDigests?: Readonly<Record<string, string>>;
   readonly artifactDigests?: readonly string[];
   readonly runner?: string;
   readonly summary?: string;
@@ -300,7 +322,8 @@ export interface ValidationEscalation {
 }
 
 export interface ValidationReport {
-  readonly schemaVersion: 2 | 3;
+  readonly criteria?: readonly CriterionResult[];
+  readonly schemaVersion: 2 | 3 | 4;
   readonly verdict: ValidationVerdict;
   readonly summary: string;
   readonly objective: string;

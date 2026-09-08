@@ -1,3 +1,5 @@
+import type { SavedAcceptanceContract } from "../../src/storage/acceptance-contract.js";
+import type { ValidationContract } from "../../src/domain/validation.js";
 import type {
   GraphView,
   ProductRunView,
@@ -35,6 +37,8 @@ function contractValue(contractText: string): unknown {
 }
 
 export const api = {
+  acceptance: (projectId: string): Promise<SavedAcceptanceContract | null> => request(`/api/acceptance?projectId=${encodeURIComponent(projectId)}`),
+  saveAcceptance: (projectId: string, contract: ValidationContract, revision: string | null): Promise<SavedAcceptanceContract> => request("/api/acceptance", json({ projectId, contract, revision })),
   runtime: (): Promise<RuntimeModeView> => request("/api/runtime"),
   configureRuntime: (configuration: RuntimeConfigurationRequest): Promise<RuntimeConfigurationResult> => request("/api/runtime", json(configuration)),
   discoverModels: (configuration: RuntimeModelDiscoveryRequest): Promise<RuntimeModelsView> => request("/api/runtime/models", json(configuration)),
@@ -45,11 +49,13 @@ export const api = {
     source: ValidationRequestView["source"],
     objective: string,
     contractText: string,
+    previousReviewId?: string,
+    receipts?: unknown,
   ): Promise<ValidationRunView> => {
     const payload: ValidationRequestView = contractText.trim() === ""
       ? { projectId, source, objective }
       : { projectId, source, objective, contract: contractValue(contractText) };
-    return request("/api/validate", json(payload));
+    return request("/api/validate", json({ ...payload, previousReviewId, receipts }));
   },
   run: (projectId: string, intent: "ask" | "investigate", query: string): Promise<ProductRunView> => request("/api/run", json({ projectId, intent, query })),
   graph: (projectId: string, symbol: string): Promise<GraphView> => request(`/api/graph?projectId=${encodeURIComponent(projectId)}&symbol=${encodeURIComponent(symbol)}`),

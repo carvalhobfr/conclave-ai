@@ -1,5 +1,6 @@
+import { loadAcceptanceContract, saveAcceptanceContract } from "../storage/acceptance-contract.js";
+import { parseEvidenceReceiptEnvelope } from "../validation/evidence-receipts.js";
 import { realpath } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import { basename, resolve } from "node:path";
 
 import { MultiLanguageCodeParser } from "../code-intelligence/multi-language-parser.js";
@@ -305,11 +306,23 @@ export class ConclaveProductService {
     return this.#session(id).project;
   }
 
+  public async acceptance(id: string) {
+    const session = this.#session(id);
+    return session.source === "demo" ? null : loadAcceptanceContract(session.root);
+  }
+
+  public async saveAcceptance(id: string, value: unknown, revision: string | null) {
+    const session = this.#session(id);
+    if (session.source === "demo") throw new Error("Open a local repository to save acceptance criteria");
+    return saveAcceptanceContract(session.root, value, revision);
+  }
+
   public async validate(
     id: string,
     source: ChangeSource,
     objective: string,
     contractValue?: unknown,
+    options: { readonly previousReviewId?: string; readonly receipts?: unknown; readonly newSeries?: boolean } = {},
   ): Promise<ValidationRunView> {
     if (objective.trim() === "") {
       throw new ProductServiceError(
@@ -321,8 +334,9 @@ export class ConclaveProductService {
     const session = this.#session(id);
     let contract;
     try {
+      const saved = contractValue === undefined ? await this.acceptance(id) : null;
       contract = contractValue === undefined
-        ? createValidationContract(objective)
+        ? saved === null ? createValidationContract(objective) : parseValidationContract(saved.contract, objective)
         : parseValidationContract(contractValue, objective);
     } catch (error) {
       throw new ProductServiceError(
@@ -332,21 +346,25 @@ export class ConclaveProductService {
       );
     }
     try {
+      if (options.newSeries && options.previousReviewId) throw new Error("Choose either a new series or a previous review");
+      const previousReport = options.previousReviewId === undefined ? undefined : (await listReviewHistory(session.root)).find((item) => item.report?.lineage.reviewId === options.previousReviewId)?.report;
+      if (options.previousReviewId !== undefined && previousReport === undefined) throw new Error("Previous review is unavailable; select a saved report or explicitly start a new series");
+      const context = { ...(previousReport === undefined ? {} : { previousReport }), receipts: options.receipts === undefined ? [] : parseEvidenceReceiptEnvelope(options.receipts), newSeries: options.newSeries === true };
       const changeSet = session.source === "demo"
         ? demoChangeSet(session.index, source)
         : await new GitChangeSetService().collect(session.root, source);
       if (session.source === "demo") {
-      return validationView(new SuperValidator().validate(session.index, changeSet, contract), changeSet.patch, true);
+      return validationView(new SuperValidator().validate(session.index, changeSet, contract, context), changeSet.patch, true);
       }
       const changeService = new GitChangeSetService();
       const materialized = await changeService.materializeValidationRoot(session.root, source);
       try {
         const indexed = await createDeterministicValidationIndex(materialized.rootPath);
-      const report = new SuperValidator().validate(indexed.index, changeSet, contract);
+      const report = new SuperValidator().validate(indexed.index, changeSet, contract, context);
       const summary = createPullRequestSummary(report);
       const handoff = createReviewHandoff(report);
       await saveReviewHistory(session.root, {
-        id: createHash("sha256").update(JSON.stringify({ headSha: report.changeSet.headSha, source: report.changeSet.source, objective: report.objective })).digest("hex").slice(0, 24),
+        id: report.lineage.reviewId,
         createdAt: new Date().toISOString(),
         repository: session.root,
         objective: report.objective,

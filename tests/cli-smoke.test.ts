@@ -94,7 +94,7 @@ describe.skipIf(!built)("conclave CLI end to end", () => {
       readonly handoff: { readonly prompt: string };
     };
 
-    expect(payload.report.schemaVersion).toBe(3);
+    expect(payload.report.schemaVersion).toBe(4);
     expect(payload.summary.changedFiles.map((file) => file.path)).toEqual(["src/refund.ts"]);
     expect(payload.summary.verdict).toBe(payload.report.verdict);
     // The product's central promise: `check` never calls a reasoning model.

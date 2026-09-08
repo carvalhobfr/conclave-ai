@@ -20,7 +20,7 @@
 
 ---
 
-> **0.9:** `0.9.0` introduces honest rule coverage and a decision-first report. Criteria editing, verified CI provenance, behavioral collection and team collaboration remain planned. See the [0.9 product plan](docs/product-0.9.md).
+> **0.10:** Acceptance criteria can be edited, confirmed and saved locally. Review results retain criterion identity and explicitly linked evidence. See [acceptance workflow](docs/acceptance.md).
 
 
 Conclave sits after a code change and before approval. It compares the real Git change, maps the code around it, points to risks and evidence, and gives the next action to a developer, coding agent, or human reviewer.

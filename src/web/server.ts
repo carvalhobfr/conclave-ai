@@ -208,6 +208,15 @@ export function createConclaveWebServer(options: ConclaveWebServerOptions = {}) 
         send(response, 200, await product.openLocal(string(payload["path"], "Repository path")));
         return;
       }
+      if (url.pathname === "/api/acceptance" && request.method === "GET") {
+        send(response, 200, await product.acceptance(string(url.searchParams.get("projectId"), "Project"))); return;
+      }
+      if (url.pathname === "/api/acceptance" && request.method === "POST") {
+        const payload = await body(request);
+        const revision = payload["revision"];
+        if (revision !== null && typeof revision !== "string") throw new Error("Saved revision is required");
+        send(response, 200, await product.saveAcceptance(string(payload["projectId"], "Project"), payload["contract"], revision)); return;
+      }
       if (url.pathname === "/api/validate" && request.method === "POST") {
         const payload = await body(request);
         send(response, 200, await product.validate(
@@ -215,6 +224,7 @@ export function createConclaveWebServer(options: ConclaveWebServerOptions = {}) 
           changeSource(payload["source"]),
           string(payload["objective"], "Objective"),
           payload["contract"],
+          { ...(typeof payload["previousReviewId"] === "string" ? { previousReviewId: payload["previousReviewId"] } : {}), ...(payload["receipts"] === undefined ? {} : { receipts: payload["receipts"] }), newSeries: payload["newSeries"] === true },
         ));
         return;
       }

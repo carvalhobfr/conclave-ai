@@ -21,6 +21,7 @@ export function createReviewDecision(report: ValidationReport): ReviewDecision {
       verificationGaps.push("Historical report: rule-level coverage was not recorded. A legacy clean or evidenced dimension does not establish complete coverage.");
     }
     verificationGaps.push(...(escalation?.reasons ?? []));
+    for (const item of report.criteria ?? []) verificationGaps.push(`${item.criterion.id}: ${item.status}. ${item.reasons.join(" ")}`);
     if (report.claims.length === 0) {
       verificationGaps.push("No explicit acceptance claims were supplied. The objective has not been verified as a delivery requirement.");
     } else {

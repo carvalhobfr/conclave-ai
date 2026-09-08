@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { loadAcceptanceContract, saveAcceptanceContract } from "./storage/acceptance-contract.js";
+import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -776,6 +778,9 @@ async function startGuided(path = "."): Promise<void> {
   const choice = await promptChoice(copy.guidedQuestion, choices, terminalColorEnabled());
   const color = terminalColorEnabled();
   switch (choice.id) {
+    case "criteria":
+      await editAcceptance([root]);
+      return;
     case "check":
       await checkRepository([root]);
       return;
@@ -836,9 +841,32 @@ async function startGuided(path = "."): Promise<void> {
   }
 }
 
+async function editAcceptance(args: readonly string[]): Promise<void> {
+  const parsed = parseArguments(args);
+  const root = resolve(parsed.positionals[0] ?? ".");
+  const saved = await loadAcceptanceContract(root);
+  if (parsed.json) { console.log(JSON.stringify(saved, null, 2)); return; }
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const objective = await prompt.question("Delivery objective (blank keeps saved): ");
+    const contract = saved?.contract ?? createValidationContract(objective);
+    const criteria = [...(contract.criteria ?? [])];
+    const statement = await prompt.question("New acceptance criterion (blank keeps existing): ");
+    if (statement.trim()) {
+      const verificationPlan = await prompt.question("How will this criterion be tested or reviewed? ");
+      const kind = await prompt.question("Evidence kind (test/runtime/human): ");
+      const confirmed = (await prompt.question("Confirm this criterion and plan? (yes/no): ")).trim().toLowerCase() === "yes";
+      criteria.push({ id: randomUUID(), statement, verificationPlan, kind: kind as "test", confirmed, claimIds: [], implementationPaths: [] });
+    }
+    const next = await saveAcceptanceContract(root, { ...contract, objective: objective.trim() || contract.objective, criteria }, saved?.revision ?? null);
+    console.log("Saved acceptance contract " + next.revision + ". Run conclave check to review it.");
+  } finally { prompt.close(); }
+}
+
 async function loadValidationContract(parsed: ParsedArguments): Promise<ValidationContract> {
   if (parsed.contractPath === undefined) {
-    return createValidationContract(parsed.objective ?? "");
+    const saved = await loadAcceptanceContract(resolve(parsed.positionals[0] ?? "."));
+    return saved === null ? createValidationContract(parsed.objective ?? "") : parseValidationContract(saved.contract, parsed.objective);
   }
   let value: unknown;
   try {
@@ -866,10 +894,10 @@ async function loadPreviousValidationReport(parsed: ParsedArguments): Promise<Va
     : value;
   if (
     typeof candidate !== "object" || candidate === null || Array.isArray(candidate) ||
-    !([2, 3] as readonly unknown[]).includes((candidate as { schemaVersion?: unknown }).schemaVersion) ||
+    !([2, 3, 4] as readonly unknown[]).includes((candidate as { schemaVersion?: unknown }).schemaVersion) ||
     typeof (candidate as { lineage?: unknown }).lineage !== "object"
   ) {
-    throw new Error("Previous report must be a Conclave schema v2/v3 report or a check JSON object containing one");
+    throw new Error("Previous report must be a Conclave schema v2/v3/v4 report or a check JSON object containing one");
   }
   return candidate as ValidationReport;
 }
@@ -937,6 +965,7 @@ async function reviewChanges(args: readonly string[]): Promise<void> {
 }
 
 function printValidationReport(report: ValidationReport): void {
+  for (const item of report.criteria ?? []) console.log(`Criterion ${item.criterion.id}: ${item.status} — ${item.criterion.statement} (previous: ${item.previousStatus ?? "initial"})\nPlan: ${item.criterion.verificationPlan}\nDigest: ${item.digest}\n${item.reasons.join(" ")}`);
     const copy = interfaceCopy(cliLanguage);
     console.log(copy.validationVerdict + ": " + report.verdict.toUpperCase());
     console.log(report.summary);
@@ -1088,7 +1117,7 @@ async function checkRepository(args: readonly string[]): Promise<void> {
   const source: ChangeSource = hasExplicitSource
     ? selectedChangeSource(parsed)
     : { kind: "workspace", base: parsed.branch ?? inspection.defaultBase };
-  const objective = parsed.objective?.trim() || inferredReviewObjective(inspection);
+  const objective = parsed.objective?.trim() || (await loadValidationContract(parsed)).objective || inferredReviewObjective(inspection);
   if (!parsed.json) {
     const copy = interfaceCopy(cliLanguage);
     progress(copy.repository, `${inspection.currentBranch} → base ${source.kind === "workspace" ? source.base : copy.selectedSource}`);
@@ -1689,6 +1718,9 @@ async function main(): Promise<void> {
       return;
     case "investigate":
       await reasonAboutRepository(args, "investigate");
+      return;
+    case "criteria":
+      await editAcceptance(args);
       return;
     case "check":
       await checkRepository(args);

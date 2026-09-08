@@ -1,0 +1,1122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://conclave.dev/schemas/validation-report.v4.schema.json",
+  "title": "Conclave Validation Report v4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "verdict",
+    "summary",
+    "objective",
+    "changeSet",
+    "findings",
+    "claims",
+    "impact",
+    "metrics",
+    "trustBoundary",
+    "lineage",
+    "findingLifecycle",
+    "receipts",
+    "challengePlan",
+    "escalation",
+    "criteria"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 4
+    },
+    "verdict": {
+      "enum": [
+        "pass",
+        "warn",
+        "block",
+        "inconclusive"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "objective": {
+      "type": "string"
+    },
+    "changeSet": {
+      "$ref": "#/$defs/changeSet"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/claimResult"
+      }
+    },
+    "impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "changedSymbols",
+        "impactedFiles",
+        "impactedSymbols"
+      ],
+      "properties": {
+        "changedSymbols": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "impactedFiles": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "impactedSymbols": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "metrics": {
+      "$ref": "#/$defs/metrics"
+    },
+    "trustBoundary": {
+      "$ref": "#/$defs/trustBoundary"
+    },
+    "lineage": {
+      "$ref": "#/$defs/lineage"
+    },
+    "findingLifecycle": {
+      "$ref": "#/$defs/findingLifecycle"
+    },
+    "receipts": {
+      "$ref": "#/$defs/receipts"
+    },
+    "challengePlan": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/$defs/challenge"
+      }
+    },
+    "escalation": {
+      "$ref": "#/$defs/escalation"
+    },
+    "criteria": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "criterion",
+          "digest",
+          "status",
+          "reasons",
+          "receiptIds"
+        ],
+        "properties": {
+          "criterion": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "statement",
+              "verificationPlan",
+              "kind",
+              "confirmed",
+              "claimIds",
+              "implementationPaths"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "verificationPlan": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "kind": {
+                "enum": [
+                  "structural",
+                  "test",
+                  "runtime",
+                  "human"
+                ]
+              },
+              "confirmed": {
+                "type": "boolean"
+              },
+              "claimIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "implementationPaths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "digest": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "supported",
+              "contradicted",
+              "not-verified",
+              "human-decision"
+            ]
+          },
+          "previousStatus": {
+            "enum": [
+              "supported",
+              "contradicted",
+              "not-verified",
+              "human-decision"
+            ]
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "receiptIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonNegativeNumber": {
+      "type": "number",
+      "minimum": 0
+    },
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "working"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "base"
+          ],
+          "properties": {
+            "kind": {
+              "const": "workspace"
+            },
+            "base": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "staged"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "base"
+          ],
+          "properties": {
+            "kind": {
+              "const": "branch"
+            },
+            "base": {
+              "type": "string"
+            },
+            "head": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "commit"
+          ],
+          "properties": {
+            "kind": {
+              "const": "commit"
+            },
+            "commit": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "lineRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "oldStart",
+        "oldCount",
+        "newStart",
+        "newCount"
+      ],
+      "properties": {
+        "oldStart": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "oldCount": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "newStart": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "newCount": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "changedFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "status",
+        "hunks"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "previousPath": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "added",
+            "modified",
+            "deleted",
+            "renamed",
+            "copied",
+            "unknown"
+          ]
+        },
+        "hunks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lineRange"
+          }
+        }
+      }
+    },
+    "changeSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "headSha",
+        "files",
+        "collectedAt",
+        "patchBytes"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "headSha": {
+          "type": "string"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/changedFile"
+          }
+        },
+        "collectedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "patchBytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "reason"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "relation": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "fingerprint",
+        "kind",
+        "severity",
+        "title",
+        "detail",
+        "evidence",
+        "remediation"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "blocking"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "remediation": {
+          "type": "string"
+        }
+      }
+    },
+    "claimCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "expectation"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "symbol-exists",
+            "callers",
+            "references",
+            "text",
+            "file-changed"
+          ]
+        },
+        "expectation": {
+          "enum": [
+            "present",
+            "absent"
+          ]
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "statement",
+        "check"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string"
+        },
+        "check": {
+          "$ref": "#/$defs/claimCheck"
+        }
+      }
+    },
+    "claimResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim",
+        "outcome",
+        "explanation",
+        "evidence"
+      ],
+      "properties": {
+        "claim": {
+          "$ref": "#/$defs/claim"
+        },
+        "outcome": {
+          "enum": [
+            "supported",
+            "rejected",
+            "inconclusive"
+          ]
+        },
+        "explanation": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filesChanged",
+        "symbolsChanged",
+        "impactedFiles",
+        "impactedSymbols",
+        "graphEdgesInspected",
+        "deterministicChecks",
+        "durationMs"
+      ],
+      "properties": {
+        "filesChanged": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "symbolsChanged": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "impactedFiles": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "impactedSymbols": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "graphEdgesInspected": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "deterministicChecks": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "durationMs": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        }
+      }
+    },
+    "trustBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deterministic",
+        "reasoningModelCalls",
+        "repositoryScriptsExecuted",
+        "knowledge"
+      ],
+      "properties": {
+        "deterministic": {
+          "const": true
+        },
+        "reasoningModelCalls": {
+          "const": 0
+        },
+        "repositoryScriptsExecuted": {
+          "const": false
+        },
+        "knowledge": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "parser",
+            "graph",
+            "embedding"
+          ],
+          "properties": {
+            "parser": {
+              "type": "string"
+            },
+            "graph": {
+              "const": "syntax-aware"
+            },
+            "embedding": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "kind",
+                "remoteCalls"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "deterministic-feature-hash"
+                },
+                "remoteCalls": {
+                  "const": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "contractDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objectiveChanged",
+        "addedClaimIds",
+        "removedClaimIds",
+        "changedClaimIds",
+        "allowedPathPrefixesAdded",
+        "allowedPathPrefixesRemoved"
+      ],
+      "properties": {
+        "objectiveChanged": {
+          "type": "boolean"
+        },
+        "addedClaimIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "removedClaimIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "changedClaimIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "allowedPathPrefixesAdded": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "allowedPathPrefixesRemoved": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "contractSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowedPathPrefixes",
+        "claims"
+      ],
+      "properties": {
+        "allowedPathPrefixes": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "digest"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "digest": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seriesId",
+        "reviewId",
+        "baselineTrust",
+        "objectiveDigest",
+        "contractDigest",
+        "diffDigest",
+        "artifactDigest",
+        "reportDigest",
+        "contractStatus",
+        "rebaselineRequired",
+        "contractDelta",
+        "contractSnapshot"
+      ],
+      "properties": {
+        "seriesId": {
+          "type": "string"
+        },
+        "reviewId": {
+          "type": "string"
+        },
+        "previousReviewId": {
+          "type": "string"
+        },
+        "previousReportDigest": {
+          "type": "string"
+        },
+        "baselineTrust": {
+          "enum": [
+            "none",
+            "unattested",
+            "invalid"
+          ]
+        },
+        "objectiveDigest": {
+          "type": "string"
+        },
+        "contractDigest": {
+          "type": "string"
+        },
+        "diffDigest": {
+          "type": "string"
+        },
+        "artifactDigest": {
+          "type": "string"
+        },
+        "reportDigest": {
+          "type": "string"
+        },
+        "contractStatus": {
+          "enum": [
+            "initial",
+            "preserved",
+            "strengthened",
+            "rebaseline-required"
+          ]
+        },
+        "rebaselineRequired": {
+          "type": "boolean"
+        },
+        "contractDelta": {
+          "$ref": "#/$defs/contractDelta"
+        },
+        "contractSnapshot": {
+          "$ref": "#/$defs/contractSnapshot"
+        }
+      }
+    },
+    "findingOccurrence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fingerprint",
+        "status",
+        "occurrences",
+        "consecutive"
+      ],
+      "properties": {
+        "fingerprint": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "new",
+            "persistent",
+            "regressed"
+          ]
+        },
+        "occurrences": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "consecutive": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "findingLifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "progress",
+        "current",
+        "resolved",
+        "seen",
+        "stagnating"
+      ],
+      "properties": {
+        "progress": {
+          "enum": [
+            "initial",
+            "duplicate-recheck",
+            "progress",
+            "stagnant",
+            "regression",
+            "mixed"
+          ]
+        },
+        "current": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/findingOccurrence"
+          }
+        },
+        "resolved": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "seen": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "stagnating": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "receiptDigest",
+        "type",
+        "status",
+        "claimedTrustLevel",
+        "effectiveTrustLevel",
+        "reasons"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "receiptDigest": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "test",
+            "build",
+            "lint",
+            "typecheck",
+            "benchmark",
+            "runtime",
+            "other"
+          ]
+        },
+        "status": {
+          "enum": [
+            "current",
+            "stale",
+            "invalid",
+            "failed",
+            "unbound"
+          ]
+        },
+        "claimedTrustLevel": {
+          "enum": [
+            "self-reported",
+            "locally-observed",
+            "ci-attested"
+          ]
+        },
+        "effectiveTrustLevel": {
+          "const": "self-reported"
+        },
+        "command": {
+          "type": "string"
+        },
+        "exitCode": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finishedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "headSha": {
+          "type": "string"
+        },
+        "artifactDigest": {
+          "type": "string"
+        },
+        "diffDigest": {
+          "type": "string"
+        },
+        "outputDigest": {
+          "type": "string"
+        },
+        "artifactDigests": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "runner": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "reasons": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "criterionDigests": {
+          "type": "object",
+          "maxProperties": 100,
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "receiptCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "current",
+        "stale",
+        "invalid",
+        "failed",
+        "unbound"
+      ],
+      "properties": {
+        "current": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "stale": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "invalid": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "failed": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "unbound": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "receipts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items",
+        "counts"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/receipt"
+          }
+        },
+        "counts": {
+          "$ref": "#/$defs/receiptCounts"
+        }
+      }
+    },
+    "escalation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recommended",
+        "dimensions",
+        "reasons"
+      ],
+      "properties": {
+        "recommended": {
+          "type": "boolean"
+        },
+        "dimensions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "dimension",
+              "coverage",
+              "reason",
+              "checks",
+              "remainingQuestions"
+            ],
+            "properties": {
+              "dimension": {
+                "enum": [
+                  "baseline",
+                  "security",
+                  "data-integrity",
+                  "lifecycle-state",
+                  "public-api-compatibility",
+                  "blast-radius",
+                  "performance",
+                  "ux-accessibility",
+                  "test-gap"
+                ]
+              },
+              "coverage": {
+                "enum": [
+                  "partial",
+                  "unchecked"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "remainingQuestions": {
+                "$ref": "#/$defs/stringArray"
+              },
+              "checks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "rule",
+                    "status",
+                    "scope",
+                    "paths",
+                    "findingIds"
+                  ],
+                  "properties": {
+                    "rule": {
+                      "enum": [
+                        "inconsistent-key",
+                        "unreleased-resource",
+                        "discarded-error",
+                        "exported-change-without-tests",
+                        "impact-outside-diff"
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "finding",
+                        "no-finding",
+                        "not-applicable"
+                      ]
+                    },
+                    "scope": {
+                      "type": "string"
+                    },
+                    "paths": {
+                      "$ref": "#/$defs/stringArray"
+                    },
+                    "findingIds": {
+                      "$ref": "#/$defs/stringArray"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "reasons": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "challenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strategy",
+        "reason",
+        "evidenceIds",
+        "suggestedProbes"
+      ],
+      "properties": {
+        "strategy": {
+          "enum": [
+            "baseline",
+            "security",
+            "data-integrity",
+            "lifecycle-state",
+            "public-api-compatibility",
+            "blast-radius",
+            "performance",
+            "ux-accessibility",
+            "test-gap"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "evidenceIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "suggestedProbes": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    }
+  }
+}

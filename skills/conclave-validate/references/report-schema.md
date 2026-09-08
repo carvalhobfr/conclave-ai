@@ -29,3 +29,5 @@ Runner errors use exit code 3 and do not constitute a Conclave verdict.
 - `challengePlan`: the always-on deterministic baseline followed by at most three risk-selected strategies and suggested probes. These are review directions, not claims that the probes ran.
 
 Do not infer evidence that is absent from these fields. A `pass` means the implemented deterministic checks passed; it does not mean arbitrary runtime, UX, security, or business behavior was executed.
+
+Schema v4 adds acceptance criteria and explicit receipt-to-criterion digests. Supported runtime criteria mean matching reported evidence; provenance remains self-reported. Older schemas stay readable.

@@ -119,3 +119,8 @@ nav { display:grid; gap:4px; } nav button { color:#aeb9c7; background:transparen
 .topbar { gap: 12px; flex-wrap: wrap; }
 .topbar > div { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .validation-summary { padding: 18px; } .topbar { padding: 12px 0; } }
+
+.acceptance-editor fieldset { border: 0; padding: 0; min-width: 0; }
+.acceptance-editor label { display: grid; gap: 5px; margin: 12px 0; }
+.acceptance-editor input:not([type=checkbox]), .acceptance-editor textarea, .acceptance-editor select { width: 100%; min-width: 0; box-sizing: border-box; }
+.acceptance-editor button { margin: 8px 10px 8px 0; padding: 8px 12px; }

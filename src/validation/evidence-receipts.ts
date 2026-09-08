@@ -90,6 +90,17 @@ function parseReceipt(value: unknown, index: number, source: string): EvidenceRe
   if (Array.isArray(rawArtifactDigests) && rawArtifactDigests.length > 20) {
     errors.push("artifactDigests exceeds the limit of 20");
   }
+  const rawCriterionDigests = parsed["criterionDigests"];
+  const criterionDigests: Record<string, string> = {};
+  if (rawCriterionDigests !== undefined) {
+    const links = object(rawCriterionDigests);
+    if (links === undefined || Object.keys(links).length > 100) errors.push("criterionDigests must be an object with at most 100 entries");
+    else for (const [id, value] of Object.entries(links)) {
+      if (!/^[a-zA-Z0-9_-]{1,100}$/u.test(id)) errors.push("invalid criterion id");
+      const checked = digest(value, "criterionDigests." + id, errors);
+      if (checked !== undefined) Object.defineProperty(criterionDigests, id, { value: checked, enumerable: true });
+    }
+  }
   const startedAt = date(parsed["startedAt"], "startedAt", errors);
   const finishedAt = date(parsed["finishedAt"], "finishedAt", errors);
   if (
@@ -102,6 +113,7 @@ function parseReceipt(value: unknown, index: number, source: string): EvidenceRe
   return {
     id,
     type,
+    ...(rawCriterionDigests === undefined ? {} : { criterionDigests }),
     ...((value => value === undefined ? {} : { command: value })(boundedString(parsed["command"], MAX_COMMAND_LENGTH, "command", errors))),
     ...(typeof exitCode === "number" && Number.isInteger(exitCode) && exitCode >= 0 ? { exitCode } : {}),
     ...(startedAt === undefined ? {} : { startedAt }),
@@ -210,6 +222,7 @@ export function evaluateEvidenceReceipts(
     const evaluated = receiptStatus(receipt, lineage, headSha, mutableSource);
     return {
       id: receipt.id,
+      ...(receipt.criterionDigests === undefined ? {} : { criterionDigests: receipt.criterionDigests }),
       receiptDigest: validationDigest("receipt", receipt),
       type: receipt.type,
       status: evaluated.status,

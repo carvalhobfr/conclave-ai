@@ -20,7 +20,7 @@
 
 ---
 
-> **0.9:** `0.9.0` introduz cobertura explícita das regras e um relatório voltado à decisão. Editor de critérios, procedência verificada do CI, coleta comportamental e colaboração de equipes continuam planejados. Veja o [plano da 0.9](docs/product-0.9.md).
+> **0.10:** Acceptance criteria can be edited, confirmed and saved locally. Review results retain criterion identity and explicitly linked evidence. See [acceptance workflow](docs/acceptance.md).
 
 
 Conclave entra depois da mudança de código e antes da aprovação. Ele compara o Git real, mapeia o código ao redor, aponta riscos e evidências e entrega a próxima ação para o desenvolvedor, coding agent ou revisor humano.

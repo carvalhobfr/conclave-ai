@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.10.0] — 2026-09-08
+
+- Editor de critérios e CLI guiada, contratos persistidos com detecção de conflito, vínculo explícito das evidências, comparação por critério e schema v4. Decisão humana permanece separada; suporte relatado não comprova procedência.
+
 ## [0.9.0] — 2026-09-08
 
 ### Adicionado
