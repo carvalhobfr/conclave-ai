@@ -30,6 +30,9 @@ export interface ParsedArguments {
   readonly contractPath: string | undefined;
   readonly previousReportPath: string | undefined;
   readonly receiptPaths: readonly string[];
+  readonly attestedReceiptPaths: readonly string[];
+  readonly attestationRepository: string | undefined;
+  readonly attestationWorkflow: string | undefined;
   readonly seriesId: string | undefined;
   readonly newSeries: boolean;
 }
@@ -65,6 +68,9 @@ export function parseArguments(args: readonly string[]): ParsedArguments {
   let contractPath: string | undefined;
   let previousReportPath: string | undefined;
   const receiptPaths: string[] = [];
+  const attestedReceiptPaths: string[] = [];
+  let attestationRepository: string | undefined;
+  let attestationWorkflow: string | undefined;
   let seriesId: string | undefined;
   let newSeries = false;
   for (let index = 0; index < args.length; index += 1) {
@@ -89,7 +95,7 @@ export function parseArguments(args: readonly string[]): ParsedArguments {
       newSeries = true;
       continue;
     }
-    if (argument === "--base" || argument === "--branch" || argument === "--head" || argument === "--commit" || argument === "--objective" || argument === "--contract" || argument === "--previous-report" || argument === "--receipt" || argument === "--series") {
+    if (argument === "--base" || argument === "--branch" || argument === "--head" || argument === "--commit" || argument === "--objective" || argument === "--contract" || argument === "--previous-report" || argument === "--receipt" || argument === "--series" || argument === "--attested-receipt" || argument === "--attestation-repository" || argument === "--attestation-workflow") {
       const value = args[index + 1];
       if (value === undefined || value.startsWith("--")) {
         throw new Error(argument + " requires a value");
@@ -101,6 +107,9 @@ export function parseArguments(args: readonly string[]): ParsedArguments {
       else if (argument === "--contract") contractPath = value;
       else if (argument === "--previous-report") previousReportPath = value;
       else if (argument === "--receipt") receiptPaths.push(value);
+      else if (argument === "--attested-receipt") attestedReceiptPaths.push(value);
+      else if (argument === "--attestation-repository") attestationRepository = value;
+      else if (argument === "--attestation-workflow") attestationWorkflow = value;
       else seriesId = value;
       index += 1;
       continue;
@@ -177,6 +186,9 @@ export function parseArguments(args: readonly string[]): ParsedArguments {
     contractPath,
     previousReportPath,
     receiptPaths,
+    attestedReceiptPaths,
+    attestationRepository,
+    attestationWorkflow,
     seriesId,
     newSeries,
   };

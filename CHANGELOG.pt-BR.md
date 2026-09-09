@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.11.0] — 2026-09-09
+
+- Action reutilizável com resumo de decisão, comparação e comentário opcional. Coleta explícita com limites e verificação de assinatura do GitHub vinculada a repositório, workflow e commit. Schema v5 distingue recibos relatados de procedência verificada.
+
 ## [0.10.0] — 2026-09-08
 
 - Editor de critérios e CLI guiada, contratos persistidos com detecção de conflito, vínculo explícito das evidências, comparação por critério e schema v4. Decisão humana permanece separada; suporte relatado não comprova procedência.

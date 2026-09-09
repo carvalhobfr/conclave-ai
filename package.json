@@ -1,6 +1,6 @@
 {
   "name": "conclave-ai",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Graph-aware independent validator for code changes and agent claims",
   "keywords": [
     "ai",
@@ -36,7 +36,10 @@
     "ROADMAP.md",
     "LICENSE",
     "docs/product-0.9.md",
-    "docs/acceptance.md"
+    "docs/acceptance.md",
+    "docs/ci-evidence.md",
+    "action.yml",
+    "scripts/action-review.mjs"
   ],
   "bin": {
     "conclave": "dist/cli.js"

@@ -73,7 +73,7 @@ async function resolveCommand(repository) {
   const localBinary = resolve(repository, "node_modules/.bin/conclave");
   if (await executable(localBinary)) return { command: localBinary, prefix: [] };
   if (process.env.CONCLAVE_BIN !== undefined) return { command: process.env.CONCLAVE_BIN, prefix: [] };
-  return { command: "npx", prefix: ["--yes", "--package=conclave-ai@0.10.0", "conclave"] };
+  return { command: "npx", prefix: ["--yes", "--package=conclave-ai@0.11.0", "conclave"] };
 }
 
 function commandArguments(parsed) {
@@ -157,7 +157,7 @@ function execute(command, args, cwd) {
 
 function validateReport(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Conclave did not return a JSON object");
-  if (![2, 3, 4].includes(value.schemaVersion)) throw new Error("Unsupported Conclave validation schema version");
+  if (![2, 3, 4, 5].includes(value.schemaVersion)) throw new Error("Unsupported Conclave validation schema version");
   if (!Object.hasOwn(VERDICT_EXIT, value.verdict)) throw new Error("Conclave returned an unknown verdict");
   for (const field of ["summary", "objective"]) {
     if (typeof value[field] !== "string") throw new Error(`Conclave report is missing ${field}`);

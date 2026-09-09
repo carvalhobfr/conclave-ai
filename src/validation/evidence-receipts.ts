@@ -1,3 +1,4 @@
+import { hasVerifiedProvenance } from "./attested-evidence.js";
 import { createHash } from "node:crypto";
 
 import type {
@@ -227,7 +228,7 @@ export function evaluateEvidenceReceipts(
       type: receipt.type,
       status: evaluated.status,
       claimedTrustLevel: receipt.claimedTrustLevel ?? "self-reported",
-      effectiveTrustLevel: "self-reported",
+      effectiveTrustLevel: hasVerifiedProvenance(receipt) ? "ci-verified" : "self-reported",
       ...(receipt.command === undefined ? {} : { command: receipt.command }),
       ...(receipt.exitCode === undefined ? {} : { exitCode: receipt.exitCode }),
       ...(receipt.startedAt === undefined ? {} : { startedAt: receipt.startedAt }),
@@ -241,7 +242,7 @@ export function evaluateEvidenceReceipts(
       ...(receipt.summary === undefined ? {} : { summary: receipt.summary }),
       reasons: [
         ...evaluated.reasons,
-        ...(receipt.claimedTrustLevel === undefined || receipt.claimedTrustLevel === "self-reported"
+        ...(hasVerifiedProvenance(receipt) || receipt.claimedTrustLevel === undefined || receipt.claimedTrustLevel === "self-reported"
           ? []
           : ["claimed trust level is not cryptographically verified and is treated as self-reported"]),
       ],

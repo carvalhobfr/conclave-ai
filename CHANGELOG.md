@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.11.0] — 2026-09-09
+
+- Reusable GitHub Action with decision summary, previous-report comparison and opt-in comment updates. Bounded opt-in execution collector and explicit GitHub attestation verification with repository/workflow/commit constraints. Schema v5 distinguishes reported receipts from cryptographically verified CI provenance.
+
 ## [0.10.0] — 2026-09-08
 
 - Acceptance criteria editor and guided CLI, atomic saved contracts with revision conflict detection, explicit evidence links, per-criterion correction comparison, and schema v4. Human decisions remain separate; reported runtime support is not verified provenance.

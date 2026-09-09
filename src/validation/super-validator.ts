@@ -586,7 +586,7 @@ export class SuperValidator {
       findings,
     );
     const report: ValidationReport = {
-      schemaVersion: 4,
+      schemaVersion: 5,
       criteria: evaluateCriteria(contract.criteria ?? [], claims, receipts, lineage.rebaselineRequired ? undefined : effectivePrevious),
       verdict,
       summary:

@@ -23,6 +23,9 @@ describe("CLI argument parser", () => {
       contractPath: undefined,
       previousReportPath: undefined,
       receiptPaths: [],
+      attestedReceiptPaths: [],
+      attestationRepository: undefined,
+      attestationWorkflow: undefined,
       seriesId: undefined,
       newSeries: false,
     });

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { collectCommand } from "./execution/collect-evidence.js";
+import { loadAttestedEvidence } from "./validation/attested-evidence.js";
 import { loadAcceptanceContract, saveAcceptanceContract } from "./storage/acceptance-contract.js";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -894,10 +896,10 @@ async function loadPreviousValidationReport(parsed: ParsedArguments): Promise<Va
     : value;
   if (
     typeof candidate !== "object" || candidate === null || Array.isArray(candidate) ||
-    !([2, 3, 4] as readonly unknown[]).includes((candidate as { schemaVersion?: unknown }).schemaVersion) ||
+    !([2, 3, 4, 5] as readonly unknown[]).includes((candidate as { schemaVersion?: unknown }).schemaVersion) ||
     typeof (candidate as { lineage?: unknown }).lineage !== "object"
   ) {
-    throw new Error("Previous report must be a Conclave schema v2/v3/v4 report or a check JSON object containing one");
+    throw new Error("Previous report must be a Conclave schema v2/v3/v4/v5 report or a check JSON object containing one");
   }
   return candidate as ValidationReport;
 }
@@ -914,6 +916,10 @@ async function loadEvidenceReceipts(parsed: ParsedArguments): Promise<readonly E
     }
     receipts.push(...parseEvidenceReceiptEnvelope(value, resolve(path)));
   }
+  for (const path of parsed.attestedReceiptPaths) {
+    if (parsed.attestationRepository === undefined || parsed.attestationWorkflow === undefined) throw new Error("Attested receipts require --attestation-repository and --attestation-workflow");
+    receipts.push(...await loadAttestedEvidence(path, parsed.attestationRepository, parsed.attestationWorkflow));
+  }
   return receipts;
 }
 
@@ -922,6 +928,9 @@ function validationProtocolArguments(parsed: ParsedArguments): readonly string[]
     ...(parsed.contractPath === undefined ? [] : ["--contract", parsed.contractPath]),
     ...(parsed.previousReportPath === undefined ? [] : ["--previous-report", parsed.previousReportPath]),
     ...parsed.receiptPaths.flatMap((path) => ["--receipt", path]),
+    ...parsed.attestedReceiptPaths.flatMap((path) => ["--attested-receipt", path]),
+    ...(parsed.attestationRepository === undefined ? [] : ["--attestation-repository", parsed.attestationRepository]),
+    ...(parsed.attestationWorkflow === undefined ? [] : ["--attestation-workflow", parsed.attestationWorkflow]),
     ...(parsed.seriesId === undefined ? [] : ["--series", parsed.seriesId]),
     ...(parsed.newSeries ? ["--new-series"] : []),
   ];
@@ -1718,6 +1727,9 @@ async function main(): Promise<void> {
       return;
     case "investigate":
       await reasonAboutRepository(args, "investigate");
+      return;
+    case "collect":
+      await collectCommand(args);
       return;
     case "criteria":
       await editAcceptance(args);

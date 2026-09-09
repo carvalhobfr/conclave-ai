@@ -260,7 +260,7 @@ export interface ValidatedEvidenceReceipt {
   readonly type: EvidenceReceiptType;
   readonly status: EvidenceReceiptStatus;
   readonly claimedTrustLevel: EvidenceReceiptClaimedTrust;
-  readonly effectiveTrustLevel: "self-reported";
+  readonly effectiveTrustLevel: "self-reported" | "ci-verified";
   readonly command?: string;
   readonly exitCode?: number;
   readonly startedAt?: string;
@@ -323,7 +323,7 @@ export interface ValidationEscalation {
 
 export interface ValidationReport {
   readonly criteria?: readonly CriterionResult[];
-  readonly schemaVersion: 2 | 3 | 4;
+  readonly schemaVersion: 2 | 3 | 4 | 5;
   readonly verdict: ValidationVerdict;
   readonly summary: string;
   readonly objective: string;

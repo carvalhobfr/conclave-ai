@@ -31,7 +31,7 @@ Conclave sits after a code change and before approval. It compares the real Git 
 change → Conclave review → coding agent fixes findings → Conclave rechecks → human approves → merge
 ```
 
-Conclave is deliberately read-only. It does not edit files, apply patches, execute repository scripts, commit, push, approve, or merge.
+Conclave review is read-only: it does not edit source, execute scripts, commit, push, approve or merge. Criteria editing writes local review metadata. The separate, explicitly invoked `collect` command executes a bounded plan; see [CI evidence](docs/ci-evidence.md).
 
 ## Choose the shortest path
 

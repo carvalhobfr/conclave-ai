@@ -1,0 +1,59 @@
+name: Conclave delivery review
+description: Review a Git change with explicit coverage, criteria and imported execution evidence.
+inputs:
+  repository:
+    description: Checked-out repository directory
+    default: '.'
+  base:
+    description: Base commit or ref
+    required: true
+  head:
+    description: Reviewed head commit or ref
+    default: HEAD
+  objective:
+    description: Expected delivery outcome
+    required: true
+  contract:
+    description: Optional contract JSON path relative to repository
+    default: ''
+  receipts:
+    description: Optional receipt JSON path relative to repository (reported provenance)
+    default: ''
+  previous-report:
+    description: Optional previous report JSON path relative to repository
+    default: ''
+  comment-token:
+    description: Optional GitHub token to update one comment on a same-repository PR
+    default: ''
+outputs:
+  report:
+    description: Absolute report path
+    value: ${{ steps.review.outputs.report }}
+  verdict:
+    description: Machine verdict
+    value: ${{ steps.review.outputs.verdict }}
+runs:
+  using: composite
+  steps:
+    - name: Build pinned Conclave action
+      shell: bash
+      env:
+        CONCLAVE_ACTION_PATH: ${{ github.action_path }}
+      run: |
+        cd "$CONCLAVE_ACTION_PATH"
+        npm ci --ignore-scripts --no-audit --no-fund
+        npm run build:core
+    - name: Review change
+      id: review
+      shell: bash
+      env:
+        CONCLAVE_ACTION_PATH: ${{ github.action_path }}
+        CONCLAVE_REPOSITORY: ${{ inputs.repository }}
+        CONCLAVE_BASE: ${{ inputs.base }}
+        CONCLAVE_HEAD: ${{ inputs.head }}
+        CONCLAVE_OBJECTIVE: ${{ inputs.objective }}
+        CONCLAVE_CONTRACT: ${{ inputs.contract }}
+        CONCLAVE_RECEIPTS: ${{ inputs.receipts }}
+        CONCLAVE_PREVIOUS: ${{ inputs.previous-report }}
+        CONCLAVE_COMMENT_TOKEN: ${{ inputs.comment-token }}
+      run: node "$CONCLAVE_ACTION_PATH/scripts/action-review.mjs"

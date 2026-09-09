@@ -33,7 +33,7 @@ export function createReviewDecision(report: ValidationReport): ReviewDecision {
     }
     for (const receipt of report.receipts.items) {
       verificationGaps.push(receipt.status === "current"
-        ? `${receipt.id}: reported ${receipt.type} result is bound to this change; execution provenance remains self-reported.`
+        ? `${receipt.id}: reported ${receipt.type} result is bound to this change; execution provenance: ${receipt.effectiveTrustLevel}.`
         : `${receipt.id}: ${receipt.status} evidence cannot verify this delivery. ${receipt.reasons.join("; ")}`);
     }
   }

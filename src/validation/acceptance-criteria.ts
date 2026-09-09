@@ -16,6 +16,6 @@ export function evaluateCriteria(criteria: readonly AcceptanceCriterion[], claim
     }
     const relevant = linked.filter((item) => item.type === criterion.kind);
     const status = relevant.some((item) => item.status === "failed") ? "contradicted" : relevant.some((item) => item.status === "current") ? "supported" : "not-verified";
-    return { ...base, status, reasons: [status === "supported" ? "Linked execution reports success for this criterion and artifact. Provenance is self-reported; test adequacy requires review." : status === "contradicted" ? "Linked execution reports failure for this criterion and artifact." : "No current, explicitly linked execution evidence matches this criterion and artifact.", ...relevant.flatMap((item) => item.reasons)] };
+    return { ...base, status, reasons: [status === "supported" ? "Linked execution reports success for this criterion and artifact. Provenance: " + (relevant.filter((item) => item.status === "current").every((item) => item.effectiveTrustLevel === "ci-verified") ? "CI signature verified" : "self-reported") + "; test adequacy requires review." : status === "contradicted" ? "Linked execution reports failure for this criterion and artifact." : "No current, explicitly linked execution evidence matches this criterion and artifact.", ...relevant.flatMap((item) => item.reasons)] };
   });
 }

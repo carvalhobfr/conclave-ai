@@ -138,7 +138,7 @@ describe("SuperValidator", () => {
       contract(),
     );
 
-    expect(report.schemaVersion).toBe(4);
+    expect(report.schemaVersion).toBe(5);
     expect(report.metrics.deterministicChecks).toBeGreaterThan(report.findings.length);
     expect(report.lineage).toEqual(expect.objectContaining({
       contractStatus: "initial",
@@ -239,7 +239,7 @@ describe("SuperValidator", () => {
 
     expect(() => validator.validate(index, changeSet(), contract(), {
       previousReport: { schemaVersion: 2, lineage: {} } as never,
-    })).toThrow("Previous report is not a comparable Conclave schema v2/v3/v4 report");
+    })).toThrow("Previous report is not a comparable Conclave schema v2/v3/v4/v5 report");
   });
 
   it("rejects duplicate claim identities before creating lineage", async () => {
@@ -421,7 +421,7 @@ describe("schema migration lineage", () => {
     const previous = finalizeReportDigest({ ...validator.validate(index, changeSet(), contract()), schemaVersion: 2, escalation: { recommended: false, dimensions: [{ dimension: "lifecycle-state", coverage: "checked-clean", reason: "Legacy check" }], reasons: [] } });
     const digest = previous.lineage.reportDigest;
     const current = validator.validate(index, changeSet(), contract(), { previousReport: previous });
-    expect(current.schemaVersion).toBe(4);
+    expect(current.schemaVersion).toBe(5);
     expect(current.lineage.contractStatus).toBe("preserved");
     expect(current.lineage.previousReportDigest).toBe(digest);
     expect(current.lineage.baselineTrust).toBe("unattested");

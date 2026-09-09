@@ -1,0 +1,49 @@
+name: Evidence provenance
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+jobs:
+  receipt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: ./
+        id: review
+        with:
+          base: HEAD^
+          head: HEAD
+          objective: Verify the Conclave delivery and its CLI startup
+      - name: Collect a bounded CLI startup check
+        shell: bash
+        env:
+          REPORT: ${{ steps.review.outputs.report }}
+        run: |
+          node -e 'require("node:fs").writeFileSync(process.env.RUNNER_TEMP + "/plan.json", JSON.stringify({version:1,checks:[{id:"cli-startup",type:"test",argv:[process.execPath,"dist/cli.js","--version"],timeoutMs:10000,criterionIds:[]}]}))'
+          node dist/cli.js collect . "$REPORT" "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/receipts.json"
+      - uses: actions/attest@v4
+        with:
+          subject-path: ${{ runner.temp }}/receipts.json
+          create-storage-record: false
+      - name: Verify and import the real attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node dist/cli.js review . --base "$(git rev-parse HEAD^)" --head HEAD --objective 'Verify the Conclave delivery and its CLI startup' --attested-receipt "$RUNNER_TEMP/receipts.json" --attestation-repository "$GITHUB_REPOSITORY" --attestation-workflow "$GITHUB_REPOSITORY/.github/workflows/evidence-attestation.yml" --json > "$RUNNER_TEMP/verified-report.json"
+          node -e 'const r=require(process.env.RUNNER_TEMP+"/verified-report.json");if(r.receipts.items[0]?.effectiveTrustLevel!=="ci-verified"||r.receipts.items[0]?.status!=="current")process.exit(1)'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-evidence
+          path: |
+            ${{ runner.temp }}/receipts.json
+            ${{ runner.temp }}/verified-report.json

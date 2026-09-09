@@ -103,7 +103,7 @@ describe("delivery decisions", () => {
   it.each(["failed", "stale", "invalid", "unbound", "current"] as const)("retains %s receipt limitations", (status) => {
     const base = report();
     const decision = createReviewDecision({ ...base, receipts: { ...base.receipts, items: [{ id: "integration", receiptDigest: "receipt_x", type: "test", status, claimedTrustLevel: "ci-attested", effectiveTrustLevel: "self-reported", reasons: ["Fixture reason"] }] } });
-    expect(decision.verificationGaps.some((gap) => gap.includes(status === "current" ? "provenance remains self-reported" : `${status} evidence cannot verify`))).toBe(true);
+    expect(decision.verificationGaps.some((gap) => gap.includes(status === "current" ? "provenance: self-reported" : `${status} evidence cannot verify`))).toBe(true);
     expect(decision.headline).not.toContain("verified");
   });
   it("keeps rebaseline above correction progress and does not describe disappearance as proof of a fix", () => {

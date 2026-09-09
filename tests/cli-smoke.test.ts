@@ -94,7 +94,7 @@ describe.skipIf(!built)("conclave CLI end to end", () => {
       readonly handoff: { readonly prompt: string };
     };
 
-    expect(payload.report.schemaVersion).toBe(4);
+    expect(payload.report.schemaVersion).toBe(5);
     expect(payload.summary.changedFiles.map((file) => file.path)).toEqual(["src/refund.ts"]);
     expect(payload.summary.verdict).toBe(payload.report.verdict);
     // The product's central promise: `check` never calls a reasoning model.
@@ -145,4 +145,11 @@ describe.skipIf(!built)("conclave CLI end to end", () => {
     expect(result.stdout).toContain("check");
     expect(existsSync(join(root, ".conclave"))).toBe(false);
   });
+});
+
+it.skipIf(!built)("check does not silently drop requested attestation verification", async () => {
+  const root = await repository();
+  const result = await runCli(["check", root, "--attested-receipt", "missing.json", "--json"], root);
+  expect(result.code).not.toBe(0);
+  expect(result.stderr).toContain("Attested receipts require");
 });
