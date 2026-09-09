@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.12.0] — 2026-09-09
+
+- Opt-in browser smoke scenarios for loopback apps: fill, click, reload and assert persisted state. Fresh contexts, same-origin network restrictions and bounded execution. Local finding feedback is tied to saved report/finding identities and never changes machine verdicts. Chromium fixtures cover saved, lost and failed persistence; real cockpit save/reload/review/feedback tested at mobile width.
+
 ## [0.11.0] — 2026-09-09
 
 - Reusable GitHub Action with decision summary, previous-report comparison and opt-in comment updates. Bounded opt-in execution collector and explicit GitHub attestation verification with repository/workflow/commit constraints. Schema v5 distinguishes reported receipts from cryptographically verified CI provenance.

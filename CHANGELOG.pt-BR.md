@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.12.0] — 2026-09-09
+
+- Cenários explícitos no navegador para apps locais: preencher, clicar, recarregar e conferir persistência. Contextos novos, rede restrita à origem e execução limitada. Feedback local vinculado ao relatório e achado, sem alterar verdicts. Fixtures no Chromium cobrem persistência correta, perdida e falha; fluxo real do cockpit validado no celular.
+
 ## [0.11.0] — 2026-09-09
 
 - Action reutilizável com resumo de decisão, comparação e comentário opcional. Coleta explícita com limites e verificação de assinatura do GitHub vinculada a repositório, workflow e commit. Schema v5 distingue recibos relatados de procedência verificada.

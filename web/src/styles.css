@@ -124,3 +124,9 @@ nav { display:grid; gap:4px; } nav button { color:#aeb9c7; background:transparen
 .acceptance-editor label { display: grid; gap: 5px; margin: 12px 0; }
 .acceptance-editor input:not([type=checkbox]), .acceptance-editor textarea, .acceptance-editor select { width: 100%; min-width: 0; box-sizing: border-box; }
 .acceptance-editor button { margin: 8px 10px 8px 0; padding: 8px 12px; }
+.composer > label { display: grid; gap: 6px; margin: 12px 0; min-width: 0; }
+.composer select, .composer input[type=file] { min-width: 0; max-width: 100%; width: 100%; box-sizing: border-box; }
+.acceptance-editor input:not([type=checkbox]), .acceptance-editor select, .composer > label select { background: #101923; color: #dce4ed; border: 1px solid #334254; border-radius: 6px; padding: 9px; }
+.acceptance-editor label:has(input[type=checkbox]) { display: flex; align-items: center; gap: 8px; }
+[aria-label="Finding feedback"] label { display: grid; gap: 6px; margin: 12px 0; }
+[aria-label="Finding feedback"] select, [aria-label="Finding feedback"] textarea { max-width: 100%; min-width: 0; width: 100%; box-sizing: border-box; }

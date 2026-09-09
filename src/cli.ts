@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { smokeCommand } from "./execution/browser-smoke.js";
 import { collectCommand } from "./execution/collect-evidence.js";
 import { loadAttestedEvidence } from "./validation/attested-evidence.js";
 import { loadAcceptanceContract, saveAcceptanceContract } from "./storage/acceptance-contract.js";
@@ -1727,6 +1728,9 @@ async function main(): Promise<void> {
       return;
     case "investigate":
       await reasonAboutRepository(args, "investigate");
+      return;
+    case "smoke":
+      await smokeCommand(args);
       return;
     case "collect":
       await collectCommand(args);

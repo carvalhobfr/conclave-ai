@@ -208,6 +208,11 @@ export function createConclaveWebServer(options: ConclaveWebServerOptions = {}) 
         send(response, 200, await product.openLocal(string(payload["path"], "Repository path")));
         return;
       }
+      if (url.pathname === "/api/feedback" && request.method === "GET") { send(response, 200, await product.feedback(string(url.searchParams.get("projectId"), "Project"))); return; }
+      if (url.pathname === "/api/feedback" && request.method === "POST") {
+        const payload = await body(request);
+        send(response, 200, await product.saveFeedback(string(payload["projectId"], "Project"), string(payload["reviewId"], "Review"), payload["feedback"])); return;
+      }
       if (url.pathname === "/api/acceptance" && request.method === "GET") {
         send(response, 200, await product.acceptance(string(url.searchParams.get("projectId"), "Project"))); return;
       }

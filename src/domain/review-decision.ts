@@ -21,10 +21,10 @@ export function createReviewDecision(report: ValidationReport): ReviewDecision {
       verificationGaps.push("Historical report: rule-level coverage was not recorded. A legacy clean or evidenced dimension does not establish complete coverage.");
     }
     verificationGaps.push(...(escalation?.reasons ?? []));
-    for (const item of report.criteria ?? []) verificationGaps.push(`${item.criterion.id}: ${item.status}. ${item.reasons.join(" ")}`);
-    if (report.claims.length === 0) {
+    for (const item of report.criteria ?? []) verificationGaps.push(`${item.criterion.statement}: ${item.status}. ${item.reasons.join(" ")}`);
+    if (report.claims.length === 0 && (report.criteria?.length ?? 0) === 0) {
       verificationGaps.push("No explicit acceptance claims were supplied. The objective has not been verified as a delivery requirement.");
-    } else {
+    } else if (report.claims.length > 0) {
       verificationGaps.push("Claim outcomes establish only their declared structural checks. Required runtime behavior still needs relevant evidence.");
     }
     const executions = report.receipts.items.filter((receipt) => receipt.type === "test" || receipt.type === "runtime");

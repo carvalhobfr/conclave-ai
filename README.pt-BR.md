@@ -31,7 +31,7 @@ Conclave entra depois da mudança de código e antes da aprovação. Ele compara
 mudança → review do Conclave → agent corrige → Conclave confere de novo → humano aprova → merge
 ```
 
-Conclave é deliberadamente somente leitura. Ele não edita arquivos, aplica patches, executa scripts do repositório, cria commit, faz push, aprova ou realiza merge.
+O review do Conclave é somente leitura: não altera código, executa scripts, cria commits, faz push ou merge. Critérios e feedback gravam metadados locais. Os comandos separados `collect` e `smoke` executam apenas planos invocados explicitamente.
 
 ## Escolha o caminho mais curto
 
@@ -84,7 +84,7 @@ npx conclave check . --base origin/main \
   --previous-report conclave-review.json --json > conclave-recheck.json
 ```
 
-A nova conferência continua na mesma série. O Conclave verifica o digest do relatório anterior, compara objetivo e contrato, cria fingerprints dos findings recorrentes e diferencia repetição idêntica de progresso, estagnação ou regressão. Use `--new-series` somente quando quiser aceitar deliberadamente uma nova baseline. Testes e builds executados externamente podem entrar com `--receipt` repetível; o vínculo com o artefato é verificado, mas a evidência continua autorrelatada até existir verificação de attestations. Veja [linhagem de review e recibos](docs/review-lineage.md).
+A nova conferência continua na mesma série. O Conclave verifica o digest do relatório anterior, compara objetivo e contrato, cria fingerprints dos findings recorrentes e diferencia repetição idêntica de progresso, estagnação ou regressão. Use `--new-series` somente quando quiser aceitar deliberadamente uma nova baseline. Testes e builds executados externamente podem entrar com `--receipt` repetível; o vínculo com o artefato é verificado, mas a evidência continua autorrelatada a menos que seja importada pela verificação explícita de attestations. Veja [linhagem de review e recibos](docs/review-lineage.md).
 
 Yarn e pnpm também funcionam:
 

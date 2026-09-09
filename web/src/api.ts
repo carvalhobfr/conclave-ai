@@ -1,3 +1,4 @@
+import type { FindingFeedback } from "../../src/storage/finding-feedback.js";
 import type { SavedAcceptanceContract } from "../../src/storage/acceptance-contract.js";
 import type { ValidationContract } from "../../src/domain/validation.js";
 import type {
@@ -37,6 +38,8 @@ function contractValue(contractText: string): unknown {
 }
 
 export const api = {
+  feedback: (projectId: string): Promise<readonly FindingFeedback[]> => request(`/api/feedback?projectId=${encodeURIComponent(projectId)}`),
+  saveFeedback: (projectId: string, reviewId: string, feedback: Pick<FindingFeedback, "fingerprint" | "classification" | "note">): Promise<FindingFeedback> => request("/api/feedback", json({ projectId, reviewId, feedback })),
   acceptance: (projectId: string): Promise<SavedAcceptanceContract | null> => request(`/api/acceptance?projectId=${encodeURIComponent(projectId)}`),
   saveAcceptance: (projectId: string, contract: ValidationContract, revision: string | null): Promise<SavedAcceptanceContract> => request("/api/acceptance", json({ projectId, contract, revision })),
   runtime: (): Promise<RuntimeModeView> => request("/api/runtime"),

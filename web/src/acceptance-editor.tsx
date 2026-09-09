@@ -34,7 +34,7 @@ export function AcceptanceEditor({ projectId, objective, onLoad, onChange }: { r
   return <section className="acceptance-editor" aria-label="Acceptance criteria"><h2>Acceptance criteria</h2><p>Define the expected result and how to check it. Confirm each criterion before treating its evidence as support.</p>
     <fieldset disabled={!ready || saving}>
       {(contract.criteria ?? []).map((item) => <article className="decision-card" key={item.id}>
-        <small>{item.id}</small>
+        <small>Acceptance criterion</small>
         <label>Expected result<input aria-label={`Expected result ${item.id}`} value={item.statement} onChange={(event) => edit(item.id, { statement: event.target.value, confirmed: false })} /></label>
         <label>Verification plan<textarea value={item.verificationPlan} onChange={(event) => edit(item.id, { verificationPlan: event.target.value, confirmed: false })} /></label>
         <label>Evidence kind<select value={item.kind} onChange={(event) => edit(item.id, { kind: event.target.value as AcceptanceCriterion["kind"], confirmed: false })}><option value="test">Test execution</option><option value="runtime">Runtime observation</option><option value="human">Human decision</option><option value="structural">Structural claims only</option></select></label>

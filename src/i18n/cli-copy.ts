@@ -24,6 +24,10 @@ const GROUPS: Readonly<Record<CommandGroup, LocalizedText>> = {
 };
 
 const COMMANDS: readonly CommandHelp[] = [
+  { id: "criteria", usage: "conclave criteria [path] [--json]", group: "workflow", description: localized("Edit saved acceptance criteria.", "Edita critérios de aceitação.", "Edita criterios de aceptación."), details: localized("Confirm expected results and verification plans.", "Confirme resultados e planos de verificação.", "Confirma resultados y planes de verificación."), examples: ["conclave criteria ."] },
+  { id: "collect", usage: "conclave collect REPOSITORY REPORT.json PLAN.json OUTPUT.json", group: "advanced", description: localized("Execute an explicit bounded command plan.", "Executa um plano explícito de comandos.", "Ejecuta un plan explícito de comandos."), details: localized("Opt-in execution; review never runs this automatically.", "Execução explícita; review não inicia esse comando.", "Ejecución explícita; review nunca inicia este comando."), examples: [] },
+  { id: "smoke", usage: "conclave smoke REPOSITORY REPORT.json PLAN.json OUTPUT.json", group: "advanced", description: localized("Exercise a declared local browser scenario.", "Testa um cenário declarado no navegador local.", "Prueba un escenario declarado en el navegador local."), details: localized("Requires optional Playwright and Chromium.", "Requer Playwright e Chromium opcionais.", "Requiere Playwright y Chromium opcionales."), examples: [] },
+
   {
     id: "check",
     usage: "conclave check [path] [--base <ref>] [--objective <goal>] [--previous-report <file>] [--receipt <file>] [--json]",

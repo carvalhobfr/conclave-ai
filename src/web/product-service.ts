@@ -1,3 +1,4 @@
+import { listFindingFeedback, recordFindingFeedback } from "../storage/finding-feedback.js";
 import { loadAcceptanceContract, saveAcceptanceContract } from "../storage/acceptance-contract.js";
 import { parseEvidenceReceiptEnvelope } from "../validation/evidence-receipts.js";
 import { realpath } from "node:fs/promises";
@@ -304,6 +305,15 @@ export class ConclaveProductService {
 
   public project(id: string): ProjectView {
     return this.#session(id).project;
+  }
+
+  public async feedback(id: string) { return listFindingFeedback(this.#session(id).root); }
+  public async saveFeedback(id: string, reviewId: string, value: unknown) {
+    const session = this.#session(id);
+    if (session.source === "demo") throw new Error("Feedback is available for local reviews");
+    const report = (await listReviewHistory(session.root)).find((item) => item.report?.lineage.reviewId === reviewId)?.report;
+    if (report === undefined) throw new Error("Select a saved review before recording feedback");
+    return recordFindingFeedback(session.root, report, value);
   }
 
   public async acceptance(id: string) {

@@ -69,7 +69,7 @@ Local Mode is marked `local-only`, accepts only loopback HTTP(S) provider endpoi
 
 ## Read-only product boundary
 
-Conclave does not edit repository files, apply patches, execute repository scripts, commit, push, approve, or merge. Review collects Git data and builds deterministic structural evidence. Ask and Investigate can call a configured reasoning provider, but their outputs cannot enter a mutation or shell path. Correction belongs to the developer's coding agent; approval belongs to a human.
+Conclave review does not edit source files, apply patches, execute repository scripts, commit, push, approve, or merge. Criteria and feedback endpoints persist local review metadata. Separate explicitly invoked collect/smoke CLI commands execute their bounded plans; there is no web endpoint for command or browser-plan execution. Review collects Git data and builds deterministic structural evidence. Ask and Investigate can call a configured reasoning provider, but their outputs cannot enter a mutation or shell path. Correction belongs to the developer's coding agent; approval belongs to a human.
 
 ## Local web application
 

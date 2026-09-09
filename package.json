@@ -1,6 +1,6 @@
 {
   "name": "conclave-ai",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Graph-aware independent validator for code changes and agent claims",
   "keywords": [
     "ai",
@@ -39,7 +39,8 @@
     "docs/acceptance.md",
     "docs/ci-evidence.md",
     "action.yml",
-    "scripts/action-review.mjs"
+    "scripts/action-review.mjs",
+    "docs/browser-smoke.md"
   ],
   "bin": {
     "conclave": "dist/cli.js"
@@ -71,7 +72,8 @@
     "typecheck": "tsc --noEmit && tsc -p web/tsconfig.json --noEmit",
     "verify": "npm run typecheck && npm run lint && npm run build && npm test && npm run test:web && npm run eval && npm run eval:graph && npm run eval:release && npm run audit",
     "eval:validation": "vitest run tests/git-change-set.test.ts tests/super-validator.test.ts tests/validation-web.test.ts --maxWorkers=1",
-    "eval:precision": "vitest run tests/escalation.test.ts tests/source-defects.test.ts tests/pr-summary.test.ts --maxWorkers=1"
+    "eval:precision": "vitest run tests/escalation.test.ts tests/source-defects.test.ts tests/pr-summary.test.ts --maxWorkers=1",
+    "test:browser": "node scripts/test-browser.mjs"
   },
   "dependencies": {
     "ignore": "7.0.6",
@@ -89,10 +91,19 @@
     "eslint": "10.8.1",
     "globals": "17.9.0",
     "jsdom": "^30.0.1",
+    "playwright": "^1.63.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "typescript-eslint": "8.66.0",
     "vite": "^8.2.1",
     "vitest": "4.1.10"
+  },
+  "peerDependencies": {
+    "playwright": "^1.63.0"
+  },
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    }
   }
 }

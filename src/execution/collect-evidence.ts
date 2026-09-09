@@ -45,12 +45,8 @@ export async function executeCheck(check: ExecutionCheck, root: string): Promise
   });
 }
 
-export async function collectExecutionEvidence(root: string, report: ValidationReport, planValue: unknown): Promise<readonly EvidenceReceiptInput[]> {
-  const checks = parseExecutionPlan(planValue);
-  const criteria = new Map((report.criteria ?? []).map((item) => [item.criterion.id, item]));
-  for (const check of checks) for (const id of check.criterionIds) if (!criteria.has(id)) throw new Error("Unknown criterion: " + id);
+export async function assertReviewedArtifact(root: string, report: ValidationReport): Promise<void> {
   const changes = new GitChangeSetService();
-  const assertArtifact = async () => {
     const current = await changes.collect(root, report.changeSet.source);
     if (current.headSha !== report.changeSet.headSha || validationDigest("diff", current.patch) !== report.lineage.diffDigest) throw new Error("Reviewed artifact changed; collect a fresh review before running checks");
     if (report.changeSet.source.kind === "branch" || report.changeSet.source.kind === "commit") {
@@ -58,14 +54,19 @@ export async function collectExecutionEvidence(root: string, report: ValidationR
       const staged = await changes.collect(root, { kind: "staged" });
       if (working.headSha !== report.changeSet.headSha || working.files.length || staged.files.length) throw new Error("Execution of an immutable review requires its clean checkout");
     }
-  };
-  await assertArtifact();
+}
+
+export async function collectExecutionEvidence(root: string, report: ValidationReport, planValue: unknown): Promise<readonly EvidenceReceiptInput[]> {
+  const checks = parseExecutionPlan(planValue);
+  const criteria = new Map((report.criteria ?? []).map((item) => [item.criterion.id, item]));
+  for (const check of checks) for (const id of check.criterionIds) if (!criteria.has(id)) throw new Error("Unknown criterion: " + id);
+  await assertReviewedArtifact(root, report);
   const receipts: EvidenceReceiptInput[] = [];
   for (const check of checks) {
     const startedAt = new Date().toISOString();
     const result = await executeCheck(check, resolve(root));
     const finishedAt = new Date().toISOString();
-    await assertArtifact();
+    await assertReviewedArtifact(root, report);
     receipts.push({ id: check.id, type: check.type, command: JSON.stringify(check.argv), startedAt, finishedAt, headSha: report.changeSet.headSha, diffDigest: report.lineage.diffDigest, runner: "conclave-opt-in-runner", claimedTrustLevel: "locally-observed", criterionDigests: Object.fromEntries(check.criterionIds.map((id) => [id, criteria.get(id)?.digest ?? ""])), ...result });
   }
   return receipts;
