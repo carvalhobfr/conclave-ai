@@ -16,8 +16,8 @@ Ship each accepted product increment as a separate minor version. After its vali
 | 0.10.0 | Criteria and correction workflow | Create and confirm stable criteria without writing JSON; link implementation, checks and receipts; show supported, contradicted, not verified and human decision states; retain criteria across rechecks and detect drift | Implemented |
 | 0.11.0 | CI evidence and PR distribution | Reusable official Action; import test/build results bound to the reviewed artifact; distinguish reported from verified provenance; one updated PR summary and correction comparison | Implemented; real CI attestation verified |
 | 0.12.0 | Behavioral evidence and feedback | Opt-in bounded smoke plans; detect failed saves and lost persistence; local finding feedback; versioned fixtures and measured failure cases | Implemented |
-| 0.13.0 | Pilot readiness | Installation/package/OS checks; end-to-end acceptance flow; documented latency, precision, misses and limitations; pilot onboarding | Planned |
-| 0.14.0 | Pilot release | All engineering gates pass; publish measured results and known gaps; decide commercial scope using actual pilot feedback | Planned |
+| 0.13.0 | Pilot readiness | Installation/package/OS checks; end-to-end acceptance flow; documented latency, precision, misses and limitations; pilot onboarding | Implemented; platform CI gate required |
+| 0.14.0 | Pilot release | All engineering gates pass; publish measured results and known gaps; decide commercial scope using actual pilot feedback | Pending real pilot teams and PRs |
 
 ## 0.9 scope and acceptance
 
@@ -56,7 +56,7 @@ Always-on model councils, broad provider expansion, automatic code mutation, aut
 - `deterministicChecks` now counts executed check scopes, including checks without findings; it is not a behavioral coverage percentage. Source cleanup matching is syntactic and file-local; aliases, delegated cleanup and actual lifetime remain verification questions.
 - Self-review: Conclave returned PASS on the implementation comparison with no deterministic findings. The model also read the changed code; this is additional fallible review, not independent runtime proof or merge approval. Product-level criteria and pilot value remain unproven and belong to subsequent milestones.
 
-Next implementation: 0.10's criteria editor and stable contract persistence, shipped with CLI/API/report/handoff integration and a recheck that shows per-criterion progress. Do not begin hosted billing or expand providers before this flow is usable.
+Next gate: [real pilot usage](pilot.md). Engineering increments 0.9–0.13 are implemented; no pilot recruitment or usage is claimed.
 
 ## Release policy and 0.9 validation — 2026-09-08
 

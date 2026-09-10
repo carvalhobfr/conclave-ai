@@ -31,3 +31,5 @@ Runner errors use exit code 3 and do not constitute a Conclave verdict.
 Do not infer evidence that is absent from these fields. A `pass` means the implemented deterministic checks passed; it does not mean arbitrary runtime, UX, security, or business behavior was executed.
 
 Schema v4 adds acceptance criteria and explicit receipt-to-criterion digests. Supported runtime criteria mean matching reported evidence; provenance remains self-reported. Older schemas stay readable.
+
+Schema v5 permits ci-verified receipt provenance only through explicit GitHub attestation verification. Raw uploaded receipts cannot grant this status. Verified provenance does not establish test adequacy.

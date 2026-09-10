@@ -20,7 +20,7 @@
 
 ---
 
-> **0.10:** Acceptance criteria can be edited, confirmed and saved locally. Review results retain criterion identity and explicitly linked evidence. See [acceptance workflow](docs/acceptance.md).
+> **0.13:** Cobertura explícita, critérios persistidos, evidências do CI, testes opcionais de navegador e feedback local implementados. Veja [preparação do piloto e limites medidos](docs/pilot.md). A disponibilidade no npm precisa ser confirmada no registro.
 
 
 Conclave entra depois da mudança de código e antes da aprovação. Ele compara o Git real, mapeia o código ao redor, aponta riscos e evidências e entrega a próxima ação para o desenvolvedor, coding agent ou revisor humano.

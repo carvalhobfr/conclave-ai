@@ -20,7 +20,7 @@
 
 ---
 
-> **0.10:** Acceptance criteria can be edited, confirmed and saved locally. Review results retain criterion identity and explicitly linked evidence. See [acceptance workflow](docs/acceptance.md).
+> **0.13:** Scoped coverage, saved acceptance criteria, CI evidence, opt-in browser checks and local finding feedback are implemented. See [pilot readiness and measured limits](docs/pilot.md). npm availability must be confirmed against the registry.
 
 
 Conclave sits after a code change and before approval. It compares the real Git change, maps the code around it, points to risks and evidence, and gives the next action to a developer, coding agent, or human reviewer.

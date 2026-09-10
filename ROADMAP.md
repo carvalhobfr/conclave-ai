@@ -51,9 +51,9 @@ Conclave is a read-only PR companion. The product gathers context and evidence, 
 - Local CLI, cockpit, portable skills, correction lineage and GitHub workflow.
 - Existing coverage is structural and heuristic; it is not proof of delivery behavior.
 
-## 0.9 — Delivery evidence — in progress
+## 0.9–0.13 — Delivery evidence — implemented
 
-The active product sequence is [Conclave 0.9](docs/product-0.9.md): honest coverage and a decision-first report, confirmed acceptance criteria, CI-bound evidence, behavioral evidence, then pilot evaluation. The first increment is `0.9.0`; later increments remain planned until their acceptance gates pass. Provider expansion follows demonstrated user needs.
+The active product sequence is [Conclave 0.9](docs/product-0.9.md): honest coverage and a decision-first report, confirmed acceptance criteria, CI-bound evidence, behavioral evidence, then pilot evaluation. Engineering increments through 0.13 are implemented. The [pilot gate](docs/pilot.md) requires real teams and PRs; 0.14 remains pending. Provider expansion follows demonstrated user needs.
 
 ## Longer-term capability backlog
 

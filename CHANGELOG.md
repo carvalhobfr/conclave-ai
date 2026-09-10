@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.13.0] — 2026-09-10
+
+- Installed-package acceptance flow with real execution, criterion recheck and stale-evidence rejection, now exercised by a six-platform/runtime CI matrix. Versioned source-rule evaluation retains known misses and noise. Pilot onboarding documents measured limits and the external 0.14 gate; no real pilot usage is claimed.
+
 ## [0.12.0] — 2026-09-09
 
 - Opt-in browser smoke scenarios for loopback apps: fill, click, reload and assert persisted state. Fresh contexts, same-origin network restrictions and bounded execution. Local finding feedback is tied to saved report/finding identities and never changes machine verdicts. Chromium fixtures cover saved, lost and failed persistence; real cockpit save/reload/review/feedback tested at mobile width.

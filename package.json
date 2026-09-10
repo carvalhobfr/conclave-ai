@@ -1,6 +1,6 @@
 {
   "name": "conclave-ai",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Graph-aware independent validator for code changes and agent claims",
   "keywords": [
     "ai",
@@ -40,7 +40,8 @@
     "docs/ci-evidence.md",
     "action.yml",
     "scripts/action-review.mjs",
-    "docs/browser-smoke.md"
+    "docs/browser-smoke.md",
+    "docs/pilot.md"
   ],
   "bin": {
     "conclave": "dist/cli.js"
@@ -73,7 +74,9 @@
     "verify": "npm run typecheck && npm run lint && npm run build && npm test && npm run test:web && npm run eval && npm run eval:graph && npm run eval:release && npm run audit",
     "eval:validation": "vitest run tests/git-change-set.test.ts tests/super-validator.test.ts tests/validation-web.test.ts --maxWorkers=1",
     "eval:precision": "vitest run tests/escalation.test.ts tests/source-defects.test.ts tests/pr-summary.test.ts --maxWorkers=1",
-    "test:browser": "node scripts/test-browser.mjs"
+    "test:browser": "node scripts/test-browser.mjs",
+    "eval:package": "node scripts/evaluate-package.mjs",
+    "eval:product": "node scripts/evaluate-product.mjs"
   },
   "dependencies": {
     "ignore": "7.0.6",

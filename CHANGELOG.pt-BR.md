@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.13.0] — 2026-09-10
+
+- Validação do pacote instalado com execução real, rechecagem de critério e rejeição de evidência desatualizada, em matriz de seis combinações de sistema/runtime. Avaliação versionada mantém falhas e ruído conhecidos. Roteiro de piloto registra limites medidos e o requisito externo da 0.14; nenhum uso real de piloto é declarado.
+
 ## [0.12.0] — 2026-09-09
 
 - Cenários explícitos no navegador para apps locais: preencher, clicar, recarregar e conferir persistência. Contextos novos, rede restrita à origem e execução limitada. Feedback local vinculado ao relatório e achado, sem alterar verdicts. Fixtures no Chromium cobrem persistência correta, perdida e falha; fluxo real do cockpit validado no celular.

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "scope": "Small synthetic source-rule corpus. Labels describe the supplied scenario, not arbitrary repository behavior.",
+  "cases": [
+    {"id":"listener-leak","source":"window.addEventListener('click', handler);","problem":true},
+    {"id":"listener-clean","source":"window.addEventListener('click', handler); window.removeEventListener('click', handler);","problem":false},
+    {"id":"wrong-receiver","source":"window.addEventListener('click', handler); document.removeEventListener('click', handler);","problem":true},
+    {"id":"comment-decoy","source":"window.addEventListener('click', handler); // window.removeEventListener('click', handler);","problem":true},
+    {"id":"comment-only","source":"// window.addEventListener('click', handler);","problem":false},
+    {"id":"timer-leak","source":"const timer = setInterval(tick, 100); clearInterval(other);","problem":true},
+    {"id":"timer-clean","source":"const timer = setInterval(tick, 100); clearInterval(timer);","problem":false},
+    {"id":"empty-catch","source":"try { save(); } catch {}","problem":true},
+    {"id":"handled-catch","source":"try { save(); } catch (error) { report(error); }","problem":false},
+    {"id":"different-scopes-known-miss","source":"function start(handler) { window.addEventListener('click', handler); } function stop(handler) { window.removeEventListener('click', handler); } start(first); stop(second);","problem":true,"knownLimitation":"Textual names in different scopes can hide different runtime handlers."},
+    {"id":"delegated-cleanup-known-noise","source":"import { registerCleanup } from './lifetime.js'; const timer = setInterval(tick,100); registerCleanup(timer);","problem":false,"knownLimitation":"The fixture contract says registerCleanup clears this timer; file-local syntax cannot prove delegation."}
+  ]
+}
