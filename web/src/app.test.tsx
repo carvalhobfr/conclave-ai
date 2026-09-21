@@ -90,7 +90,7 @@ const run: ProductRunView = {
   graph: { query: "bootstrapSession", status: "resolved", nodes: [], edges: [] },
 };
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); window.localStorage.clear(); vi.unstubAllGlobals(); });
 
 function mockFetch(validationResult: ValidationRunView = validation): ReturnType<typeof vi.fn> {
   const mock = vi.fn((url: string, init?: RequestInit) => {
@@ -184,6 +184,27 @@ describe("Conclave product UI", () => {
       apiKey: "test-browser-key",
     }));
     expect(screen.getByLabelText<HTMLInputElement>("API key").value).toBe("");
+  });
+
+  it("keeps review setups simple, lets people favorite one, and applies its saved model before saving credentials", async () => {
+    mockFetch();
+    render(<App />);
+    await screen.findByText("auth-repository");
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace navigation" })).getByRole("button", { name: /Settings/ }));
+
+    expect(screen.getByRole("heading", { name: "Choose how you review" })).toBeTruthy();
+    expect(screen.getByText("Fast, evidence-first reviews for everyday changes.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Use Deep review" }));
+    await waitFor(() => expect(screen.getByLabelText<HTMLInputElement>("Model").value).toBe("gpt-6-astra"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Deep review favorite" }));
+    expect(screen.getByRole("button", { name: "Remove Deep review favorite" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Make Deep review default" }));
+    expect(screen.getByText("Default")).toBeTruthy();
+    const stored = window.localStorage.getItem("conclave.councils.v1") ?? "";
+    expect(stored).toContain('"activeId":"deep-review"');
+    expect(stored).toContain('"defaultId":"deep-review"');
+    expect(stored).toContain('"deep-review"');
   });
 });
 

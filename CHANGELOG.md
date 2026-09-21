@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.14.0] — 2026-09-21
+
+- A calmer cockpit for choosing saved review setups: concise presets, favorites, a default, and a quick switcher. Users can save a copy of a setup locally without exposing or retaining provider credentials in the preset.
+
 ## [0.13.0] — 2026-09-10
 
 - Installed-package acceptance flow with real execution, criterion recheck and stale-evidence rejection, now exercised by a six-platform/runtime CI matrix. Versioned source-rule evaluation retains known misses and noise. Pilot onboarding documents measured limits and the external 0.14 gate; no real pilot usage is claimed.

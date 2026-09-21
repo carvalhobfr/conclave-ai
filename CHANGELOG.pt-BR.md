@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.14.0] — 2026-09-21
+
+- Cockpit mais calmo para escolher configurações de review salvas: presets objetivos, favoritos, padrão e troca rápida. A pessoa pode salvar uma cópia local da configuração sem expor ou reter credenciais do provedor no preset.
+
 ## [0.13.0] — 2026-09-10
 
 - Validação do pacote instalado com execução real, rechecagem de critério e rejeição de evidência desatualizada, em matriz de seis combinações de sistema/runtime. Avaliação versionada mantém falhas e ruído conhecidos. Roteiro de piloto registra limites medidos e o requisito externo da 0.14; nenhum uso real de piloto é declarado.

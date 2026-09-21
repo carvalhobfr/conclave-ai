@@ -133,12 +133,92 @@ const CONFIGURATION_PROFILES: readonly ConfigurationProfile[] = [
   { id: "custom", label: "Custom OpenAI-compatible", mode: "api", provider: "openai-compatible", baseUrl: "https://provider.example/v1", model: "", reasoningPreset: "free-like", models: [] },
 ];
 
+type ConclaveCost = "Low" | "Moderate" | "Premium";
+
+interface SavedConclave {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly cost: ConclaveCost;
+  readonly profileId: ConfigurationProfileId;
+  readonly model: string;
+  readonly baseUrl: string;
+  readonly reasoningPreset: RuntimeConfigurationRequest["reasoningPreset"];
+  readonly builtIn?: boolean;
+}
+
+interface ConclaveLibrary {
+  readonly activeId: string;
+  readonly defaultId: string;
+  readonly favoriteIds: readonly string[];
+  readonly custom: readonly SavedConclave[];
+}
+
+const CONCLAVE_LIBRARY_KEY = "conclave.councils.v1";
+const CONCLAVE_PRESETS: readonly SavedConclave[] = [
+  { id: "essential", name: "Essential", description: "Fast, evidence-first reviews for everyday changes.", cost: "Low", profileId: "opencode-go", model: "deepseek-v4-flash", baseUrl: "https://opencode.ai/zen/go/v1", reasoningPreset: "free-like", builtIn: true },
+  { id: "balanced", name: "Balanced", description: "More time for complex changes without using a premium model.", cost: "Moderate", profileId: "opencode-go", model: "kimi-k2.7-code", baseUrl: "https://opencode.ai/zen/go/v1", reasoningPreset: "full", builtIn: true },
+  { id: "deep-review", name: "Deep review", description: "For the changes that deserve a second, more deliberate look.", cost: "Premium", profileId: "custom", model: "gpt-6-astra", baseUrl: "https://api.openai.com/v1", reasoningPreset: "full", builtIn: true },
+];
+
+function allConclaves(library: ConclaveLibrary): readonly SavedConclave[] {
+  return [...CONCLAVE_PRESETS, ...library.custom];
+}
+
+function isSavedConclave(value: unknown): value is SavedConclave {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  return typeof item["id"] === "string" && typeof item["name"] === "string" && typeof item["description"] === "string"
+    && (item["cost"] === "Low" || item["cost"] === "Moderate" || item["cost"] === "Premium")
+    && typeof item["profileId"] === "string" && typeof item["model"] === "string" && typeof item["baseUrl"] === "string"
+    && (item["reasoningPreset"] === "free-like" || item["reasoningPreset"] === "full" || item["reasoningPreset"] === "local");
+}
+
+function loadConclaveLibrary(): ConclaveLibrary {
+  const fallback: ConclaveLibrary = { activeId: "essential", defaultId: "essential", favoriteIds: ["essential"], custom: [] };
+  try {
+    const saved = window.localStorage.getItem(CONCLAVE_LIBRARY_KEY);
+    if (saved === null) return fallback;
+    const value: unknown = JSON.parse(saved);
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return fallback;
+    const record = value as Record<string, unknown>;
+    if (typeof record["activeId"] !== "string" || typeof record["defaultId"] !== "string" || !Array.isArray(record["favoriteIds"]) || !Array.isArray(record["custom"])) return fallback;
+    return { activeId: record["activeId"], defaultId: record["defaultId"], favoriteIds: record["favoriteIds"].filter((id): id is string => typeof id === "string"), custom: record["custom"].filter(isSavedConclave) };
+  } catch { return fallback; }
+}
+
+function ConclaveCards({ library, onSelect, onDefault, onFavorite, onCreate }: {
+  readonly library: ConclaveLibrary;
+  readonly onSelect: (id: string) => void;
+  readonly onDefault: (id: string) => void;
+  readonly onFavorite: (id: string) => void;
+  readonly onCreate: (name: string, source: Omit<SavedConclave, "id" | "name" | "description" | "cost">) => void;
+}) {
+  const [name, setName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const selected = allConclaves(library).find((item) => item.id === library.activeId);
+  return <section className="conclave-library" aria-label="Conclaves">
+    <header><div><span className="decision-kicker">Your Conclaves</span><h2>Choose how you review</h2><p>Start with a preset, or keep one you made for later.</p></div></header>
+    <div className="conclave-cards">{allConclaves(library).map((conclave) => {
+      const active = conclave.id === library.activeId;
+      const favorite = library.favoriteIds.includes(conclave.id);
+      return <article className={`conclave-card ${active ? "active" : ""}`} key={conclave.id}>
+        <button type="button" className="conclave-card-main" onClick={() => onSelect(conclave.id)} aria-label={`Use ${conclave.name}`} aria-pressed={active}><div><strong>{conclave.name}</strong>{conclave.id === library.defaultId && <span className="default-tag">Default</span>}</div><p>{conclave.description}</p><small>{conclave.cost} estimated cost</small></button>
+        <footer><button type="button" className={favorite ? "star active" : "star"} aria-label={`${favorite ? "Remove" : "Add"} ${conclave.name} favorite`} onClick={() => onFavorite(conclave.id)}>{favorite ? "★" : "☆"}</button><button type="button" className="text-action" aria-label={`Make ${conclave.name} default`} onClick={() => onDefault(conclave.id)} disabled={conclave.id === library.defaultId}>Make default</button></footer>
+      </article>;
+    })}</div>
+    <div className="conclave-create">
+      {!creating ? <button type="button" className="text-action" onClick={() => setCreating(true)}>Create your own</button> : <form onSubmit={(event) => { event.preventDefault(); if (name.trim() === "" || selected === undefined) return; onCreate(name.trim(), selected); setName(""); setCreating(false); }}><input aria-label="Conclave name" placeholder="Name this Conclave" value={name} onChange={(event) => setName(event.target.value)} autoFocus /><button type="submit" className="text-action">Save</button><button type="button" className="text-action" onClick={() => setCreating(false)}>Cancel</button></form>}
+    </div>
+  </section>;
+}
+
 function profileFor(runtime: RuntimeModeView): ConfigurationProfile {
   return CONFIGURATION_PROFILES.find((profile) => profile.provider === runtime.provider && profile.mode === runtime.active)
     ?? DEFAULT_CONFIGURATION_PROFILE;
 }
 
-function ConfigurationPanel({ runtime, onRuntime }: { readonly runtime: RuntimeModeView | undefined; readonly onRuntime: (runtime: RuntimeModeView) => void }) {
+function ConfigurationPanel({ runtime, onRuntime, library, onSelectConclave, onDefaultConclave, onFavoriteConclave, onCreateConclave }: { readonly runtime: RuntimeModeView | undefined; readonly onRuntime: (runtime: RuntimeModeView) => void; readonly library: ConclaveLibrary; readonly onSelectConclave: (id: string) => void; readonly onDefaultConclave: (id: string) => void; readonly onFavoriteConclave: (id: string) => void; readonly onCreateConclave: (name: string, source: Omit<SavedConclave, "id" | "name" | "description" | "cost">) => void }) {
   const initial = runtime === undefined ? DEFAULT_CONFIGURATION_PROFILE : profileFor(runtime);
   const [profileId, setProfileId] = useState<ConfigurationProfileId>(initial.id);
   const [model, setModel] = useState(runtime?.model ?? initial.model);
@@ -158,6 +238,18 @@ function ConfigurationPanel({ runtime, onRuntime }: { readonly runtime: RuntimeM
     setBaseUrl(runtime.baseUrl ?? next.baseUrl);
     setReasoningPreset(runtime.reasoningPreset ?? next.reasoningPreset);
   }, [runtime]);
+  useEffect(() => {
+    const next = allConclaves(library).find((item) => item.id === library.activeId);
+    if (next === undefined) return;
+    setProfileId(next.profileId);
+    setModel(next.model);
+    setBaseUrl(next.baseUrl);
+    setReasoningPreset(next.reasoningPreset);
+    setApiKey("");
+    setAvailableModels([]);
+    setResult(undefined);
+    setError("");
+  }, [library]);
   if (runtime === undefined) return <Empty title="Configuration unavailable" detail="The server runtime has not responded yet." />;
   const profile = CONFIGURATION_PROFILES.find((item) => item.id === profileId) ?? initial;
   const chooseProfile = (id: ConfigurationProfileId) => {
@@ -213,6 +305,7 @@ function ConfigurationPanel({ runtime, onRuntime }: { readonly runtime: RuntimeM
     }
   };
   return <section className="retrieval-panel configuration-panel" aria-label="Provider and role configuration">
+    <ConclaveCards library={library} onSelect={onSelectConclave} onDefault={onDefaultConclave} onFavorite={onFavoriteConclave} onCreate={onCreateConclave} />
     <header><div><span className="decision-kicker">Local server settings</span><h2>Provider and model</h2></div><span className={`runtime-state ${runtime.available ? "ready" : "unavailable"}`}>{runtime.available ? "CONFIGURED" : "NEEDS SETUP"}</span></header>
     <p className="muted">Choose a provider here. Save and test updates the running cockpit immediately and writes the configuration to the local ignored <code>.env</code>.</p>
     <form className="configuration-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
@@ -241,6 +334,7 @@ function ConfigurationPanel({ runtime, onRuntime }: { readonly runtime: RuntimeM
 }
 
 export function App() {
+  const [conclaveLibrary, setConclaveLibrary] = useState<ConclaveLibrary>(loadConclaveLibrary);
   const [project, setProject] = useState<ProjectView>();
   const [runtime, setRuntime] = useState<RuntimeModeView>();
   const [intent, setIntent] = useState<ProductIntent>("validate");
@@ -259,6 +353,15 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [history, setHistory] = useState<readonly ReviewHistoryView[]>([]);
+  useEffect(() => { window.localStorage.setItem(CONCLAVE_LIBRARY_KEY, JSON.stringify(conclaveLibrary)); }, [conclaveLibrary]);
+  const selectConclave = (id: string) => setConclaveLibrary((current) => ({ ...current, activeId: id }));
+  const defaultConclave = (id: string) => setConclaveLibrary((current) => ({ ...current, activeId: id, defaultId: id }));
+  const favoriteConclave = (id: string) => setConclaveLibrary((current) => ({ ...current, favoriteIds: current.favoriteIds.includes(id) ? current.favoriteIds.filter((item) => item !== id) : [...current.favoriteIds, id] }));
+  const createConclave = (name: string, source: Omit<SavedConclave, "id" | "name" | "description" | "cost">) => {
+    const id = `custom-${Date.now().toString(36)}`;
+    const created: SavedConclave = { ...source, id, name, description: "A saved review setup you can return to anytime.", cost: "Moderate" };
+    setConclaveLibrary((current) => ({ ...current, activeId: id, favoriteIds: [...current.favoriteIds, id], custom: [...current.custom, created] }));
+  };
   const openDemo = async () => { setBusy(true); try { const opened = await api.demo(); setProject(opened); setNotice("Demo Mode uses deterministic repository and change fixtures. Validation makes no model call."); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not open Demo Mode."); } finally { setBusy(false); } };
   useEffect(() => {
     void api.runtime().then(setRuntime).catch(() => undefined);
@@ -328,7 +431,7 @@ export function App() {
       </section>
     </aside>
     <section className="workspace">
-      <header className="topbar"><div>{project === undefined ? <span>Opening project…</span> : <><strong>{project.name}</strong><span>{project.path}</span></>}</div><div className="mode-badge">{runtime?.active === "local" ? "LOCAL MODEL" : runtime?.available ? "REASONING READY" : "REVIEW READY"}</div></header>
+      <header className="topbar"><div>{project === undefined ? <span>Opening project…</span> : <><strong>{project.name}</strong><span>{project.path}</span></>}</div><div className="topbar-actions"><label className="conclave-switcher"><span className="sr-only">Active Conclave</span><select value={conclaveLibrary.activeId} onChange={(event) => { selectConclave(event.target.value); setTab("settings"); }}><optgroup label="Favorites">{allConclaves(conclaveLibrary).filter((item) => conclaveLibrary.favoriteIds.includes(item.id)).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</optgroup><optgroup label="All Conclaves">{allConclaves(conclaveLibrary).filter((item) => !conclaveLibrary.favoriteIds.includes(item.id)).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</optgroup></select></label><div className="mode-badge">{runtime?.active === "local" ? "LOCAL MODEL" : runtime?.available ? "REASONING READY" : "REVIEW READY"}</div></div></header>
       {notice !== "" && <div className="notice" role="status">{notice}</div>}
       {busy && <div className="review-progress" role="progressbar" aria-label="Conclave is analyzing the repository"><span /></div>}
       {tab !== "settings" && tab !== "history" && <>
@@ -345,7 +448,7 @@ export function App() {
       </section>
       <section className="project-stats">{project !== undefined && <><span>{project.indexedFiles} files indexed</span><span>{project.symbols} functions, classes, and code units</span><span>{project.graphEdges} code relationships</span></>}</section>
       </>}
-      {tab === "settings" ? <ConfigurationPanel runtime={runtime} onRuntime={setRuntime} /> : tab === "history" ? <HistoryPanel records={history} /> : intent === "validate" ? (validationRun === undefined ? <Empty title="From code change to a safer PR" detail="Choose the change, confirm its objective, and let Conclave collect the context a reviewer or coding agent needs next." /> : <><ValidationWorkspace result={validationRun} tab={tab} onSelect={setTab} />{tab === "findings" && project?.source === "local" && <FeedbackPanel key={validationRun.report.lineage.reviewId} projectId={project.id} report={validationRun.report} />}</>) : !showResults ? <Empty title="Ask the repository" detail="Open a repository, then ask a focused question or investigate a suspected behavior." /> : <><div className="result-tabs" role="tablist" aria-label="Result views"><button role="tab" aria-selected={tab === "verdict"} onClick={() => setTab("verdict")}>Verdict</button><button role="tab" aria-selected={tab === "evidence"} onClick={() => setTab("evidence")}>Evidence</button><button role="tab" aria-selected={tab === "graph"} onClick={() => setTab("graph")}>Graph</button><button role="tab" aria-selected={tab === "retrieval"} onClick={() => setTab("retrieval")}>Retrieval</button></div>{run.error !== undefined ? <section className="error-card"><span>Error · {run.error.code}</span><h2>{run.title}</h2><p>{run.error.message}</p><p>{run.error.action}</p></section> : tab === "verdict" ? <section className="verdict"><header><span className={`verdict-status ${run.status}`}>{statusLabel(run.status)}</span><h2>{run.title}</h2></header><p className="answer">{run.answer}</p><Claims run={run} onEvidence={(id) => { setSelectedEvidence(id); setTab("evidence"); }} /><section className="trace"><h3>Bounded role route</h3>{run.trace.map((item) => <div key={item.role}><strong>{item.role}</strong><span>{item.status === "ran" ? "✓ ran" : "○ skipped"}</span><small>{item.reason}</small></div>)}</section><section className="metrics">{run.metrics.map((metric) => <div key={metric.label}><strong>{metric.value}</strong><span>{metric.label}</span></div>)}</section></section> : tab === "evidence" ? <EvidencePanel evidence={run.evidence} selected={selectedEvidence} onSelect={setSelectedEvidence} /> : tab === "graph" ? <GraphPanel graph={run.graph} onSearch={(value) => void explore(value)} /> : <RetrievalPanel run={run} />}</>}
+      {tab === "settings" ? <ConfigurationPanel runtime={runtime} onRuntime={setRuntime} library={conclaveLibrary} onSelectConclave={selectConclave} onDefaultConclave={defaultConclave} onFavoriteConclave={favoriteConclave} onCreateConclave={createConclave} /> : tab === "history" ? <HistoryPanel records={history} /> : intent === "validate" ? (validationRun === undefined ? <Empty title="From code change to a safer PR" detail="Choose the change, confirm its objective, and let Conclave collect the context a reviewer or coding agent needs next." /> : <><ValidationWorkspace result={validationRun} tab={tab} onSelect={setTab} />{tab === "findings" && project?.source === "local" && <FeedbackPanel key={validationRun.report.lineage.reviewId} projectId={project.id} report={validationRun.report} />}</>) : !showResults ? <Empty title="Ask the repository" detail="Open a repository, then ask a focused question or investigate a suspected behavior." /> : <><div className="result-tabs" role="tablist" aria-label="Result views"><button role="tab" aria-selected={tab === "verdict"} onClick={() => setTab("verdict")}>Verdict</button><button role="tab" aria-selected={tab === "evidence"} onClick={() => setTab("evidence")}>Evidence</button><button role="tab" aria-selected={tab === "graph"} onClick={() => setTab("graph")}>Graph</button><button role="tab" aria-selected={tab === "retrieval"} onClick={() => setTab("retrieval")}>Retrieval</button></div>{run.error !== undefined ? <section className="error-card"><span>Error · {run.error.code}</span><h2>{run.title}</h2><p>{run.error.message}</p><p>{run.error.action}</p></section> : tab === "verdict" ? <section className="verdict"><header><span className={`verdict-status ${run.status}`}>{statusLabel(run.status)}</span><h2>{run.title}</h2></header><p className="answer">{run.answer}</p><Claims run={run} onEvidence={(id) => { setSelectedEvidence(id); setTab("evidence"); }} /><section className="trace"><h3>Bounded role route</h3>{run.trace.map((item) => <div key={item.role}><strong>{item.role}</strong><span>{item.status === "ran" ? "✓ ran" : "○ skipped"}</span><small>{item.reason}</small></div>)}</section><section className="metrics">{run.metrics.map((metric) => <div key={metric.label}><strong>{metric.value}</strong><span>{metric.label}</span></div>)}</section></section> : tab === "evidence" ? <EvidencePanel evidence={run.evidence} selected={selectedEvidence} onSelect={setSelectedEvidence} /> : tab === "graph" ? <GraphPanel graph={run.graph} onSearch={(value) => void explore(value)} /> : <RetrievalPanel run={run} />}</>}
     </section>
   </main>;
 }
