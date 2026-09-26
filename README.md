@@ -52,6 +52,8 @@ npm install --save-dev conclave-ai
 npx conclave check .
 ```
 
+Or install once for every repository with `npm install -g conclave-ai`, then run `conclave` for the guided menu.
+
 That is enough for the normal workflow. No API key and no prior index are required.
 
 `check` is the recommended command. It automatically:
@@ -230,11 +232,24 @@ The UI is another view of the same engine. It cannot edit the repository or perf
 Review never needs a key. A provider is used only for the read-only `ask` and `investigate` modes:
 
 ```bash
-conclave init
+conclave init            # provider → model → API key, three steps
 conclave provider-check
 ```
 
-The guided setup supports OpenAI/Codex-compatible keys, OpenRouter—including OpenRouter Go plan keys—Anthropic, and OpenCode Zen, with maintained model profiles and custom model IDs. Hidden input is stored only in the local Git-ignored `.env`. Browser code never receives it.
+The guided setup supports OpenCode Go, OpenAI/Codex-compatible keys, OpenRouter, and Anthropic, with maintained model profiles and custom model IDs. Settings are saved per user in `~/.config/conclave/credentials.env` (owner-only permissions), so a global install works in every repository. Browser code never receives the key.
+
+Edit any setting later without rerunning the wizard:
+
+```bash
+conclave config                          # show every value and where it comes from (secrets masked)
+conclave config set api-key              # asks hidden; or pipe: echo "$KEY" | conclave config set api-key
+conclave config set model deepseek-v4.1-flash
+conclave config set provider openrouter
+conclave config unset base-url
+conclave config edit                     # open the settings file in $EDITOR
+```
+
+Precedence: shell environment > project `.env` > user settings. Add `--project` to `init` or `config set` to write the project `.env` instead.
 
 ## Update and diagnose
 

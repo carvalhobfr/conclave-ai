@@ -224,11 +224,24 @@ A UI usa o mesmo motor da CLI. Ela não corrige nem aplica o patch. Encerre com 
 Review nunca precisa de chave. Um provedor é usado apenas nos modos read-only `ask` e `investigate`:
 
 ```bash
-conclave init
+conclave init            # provider → modelo → chave de API, três passos
 conclave provider-check
 ```
 
-O setup guiado aceita chaves compatíveis com OpenAI/Codex, OpenRouter — incluindo chaves do plano OpenRouter Go —, Anthropic e OpenCode Zen, com perfis prontos e IDs de modelos personalizados. A entrada é escondida e salva somente no `.env` local ignorado pelo Git. O navegador nunca recebe a chave.
+O setup guiado aceita OpenCode Go, chaves compatíveis com OpenAI/Codex, OpenRouter e Anthropic, com perfis prontos e IDs de modelos personalizados. As configurações ficam salvas por usuário em `~/.config/conclave/credentials.env` (permissão só do dono), então uma instalação global funciona em todo repositório. O navegador nunca recebe a chave.
+
+Edite qualquer configuração depois, sem refazer o wizard:
+
+```bash
+conclave config                          # mostra cada valor e sua origem (segredos mascarados)
+conclave config set api-key              # pede oculto; ou via pipe: echo "$KEY" | conclave config set api-key
+conclave config set model deepseek-v4.1-flash
+conclave config set provider openrouter
+conclave config unset base-url
+conclave config edit                     # abre o arquivo no $EDITOR
+```
+
+Precedência: ambiente do shell > `.env` do projeto > configurações do usuário. Use `--project` em `init` ou `config set` para gravar no `.env` do projeto.
 
 ## Atualização e diagnóstico
 

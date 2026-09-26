@@ -7,7 +7,7 @@ import { basename, resolve } from "node:path";
 import { MultiLanguageCodeParser } from "../code-intelligence/multi-language-parser.js";
 import type { RepositoryCodeIndex } from "../domain/code-index.js";
 import { loadReasoningConfiguration } from "../config/reasoning-config.js";
-import { writeConclaveEnvironment } from "../config/environment-file.js";
+import { activeEnvironmentPath, updateConclaveEnvironment } from "../config/environment-file.js";
 import { describeRuntimeConfig, loadRuntimeConfig } from "../config/runtime-config.js";
 import type { RuntimeConfig } from "../domain/execution-mode.js";
 import type { CredentialSource } from "../domain/storage.js";
@@ -285,7 +285,7 @@ export class ConclaveProductService {
     this.#demoRoot = resolve(options.demoRoot ?? "demo/auth-repository");
     this.#allowedRoot = resolve(options.allowedRoot ?? process.env["CONCLAVE_WEB_ALLOWED_ROOT"] ?? process.cwd());
     this.#environment = options.environment ?? process.env;
-    this.#environmentPath = resolve(options.environmentPath ?? ".env");
+    this.#environmentPath = resolve(options.environmentPath ?? activeEnvironmentPath());
     this.#diagnose = options.diagnose ?? diagnoseProvider;
     this.#fetch = options.fetchImplementation ?? fetch;
   }
@@ -486,7 +486,7 @@ export class ConclaveProductService {
       );
     }
 
-    await writeConclaveEnvironment(this.#environmentPath, values);
+    await updateConclaveEnvironment(this.#environmentPath, values);
     Object.assign(this.#environment, values);
     const diagnostic = await this.#diagnose(config, new EnvironmentCredentialSource(this.#environment)).catch(() => ({
       mode: config.mode,

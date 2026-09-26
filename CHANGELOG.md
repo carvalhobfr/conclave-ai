@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.15.0] — 2026-09-26
+
+- Editable settings for global installs: `conclave config set|get|unset|edit|path` with masked secrets, per-user settings in ~/.config/conclave/credentials.env, a three-step `conclave init` that keeps the saved key, OpenCode Go in the wizard, and a shorter guided menu with More and Settings submenus.
+
 ## [0.14.1] — 2026-09-26
 
 - Role-specific model mixes with a fallback model, an optional SystemOne judge provider, OpenCode Go as the recommended low-cost default, and a reproducible product lab for measuring cost and review quality.

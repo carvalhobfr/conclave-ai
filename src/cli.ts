@@ -15,7 +15,21 @@ import { parseArguments, type ParsedArguments } from "./cli-arguments.js";
 import { MultiLanguageCodeParser } from "./code-intelligence/multi-language-parser.js";
 import { describeRuntimeConfig, loadRuntimeConfig } from "./config/runtime-config.js";
 import { loadReasoningConfiguration } from "./config/reasoning-config.js";
-import { loadConclaveEnvironment, writeConclaveEnvironment } from "./config/environment-file.js";
+import {
+  activeEnvironmentPath,
+  globalEnvironmentPath,
+  loadConclaveEnvironment,
+  readConclaveEnvironmentFile,
+  updateConclaveEnvironment,
+} from "./config/environment-file.js";
+import {
+  CONFIG_KEY_ALIASES,
+  isSecretKey,
+  maskValue,
+  PRIMARY_CONFIG_KEYS,
+  resolveConfigKey,
+  validateConfigValue,
+} from "./config/config-keys.js";
 import {
   INTERFACE_LANGUAGES,
   languageFromEnvironment,
@@ -81,6 +95,7 @@ import { inferredReviewObjective, inspectRepository } from "./workflow/repositor
 import {
   cliHelp,
   guidedChoices,
+  type GuidedMenu,
   interfaceCopy,
   languageDisplayName,
 } from "./i18n/cli-copy.js";
@@ -89,6 +104,9 @@ import {
 // redirect or silently override global CLI settings.
 const userPreferenceEnvironment: NodeJS.ProcessEnv = { ...process.env };
 const conclaveEnvironmentFile = loadConclaveEnvironment();
+// Per-user settings fill whatever the process and the project `.env` leave unset, so a global
+// install works in any repository after one `conclave init`.
+const globalEnvironmentFile = loadConclaveEnvironment(process.env, globalEnvironmentPath(userPreferenceEnvironment));
 
 let cliLanguage: InterfaceLanguage = "en";
 let loadedUserPreferences: LoadedUserPreferences | undefined;
@@ -772,15 +790,45 @@ async function guidedChangeSource(root: string, color: boolean): Promise<readonl
   return [root, `--${source.id}`];
 }
 
-async function startGuided(path = "."): Promise<void> {
+async function startGuided(path = ".", menu: GuidedMenu = "main"): Promise<void> {
   const root = resolve(path);
   const copy = interfaceCopy(cliLanguage);
-  const choices: readonly GuidedChoice[] = guidedChoices(cliLanguage);
-  console.log(`\n${copy.guidedTitle}\n`);
-  console.log(`${copy.repository}: ${root}`);
+  const choices: readonly GuidedChoice[] = guidedChoices(cliLanguage, menu);
+  if (menu === "main") {
+    console.log(`\n${copy.guidedTitle}\n`);
+    console.log(`${copy.repository}: ${root}`);
+    if (process.env["CONCLAVE_API_KEY"] === undefined) {
+      console.log({
+        en: "Tip: check and compare work without an API key. Ask and Investigate need one: Settings → Set up AI provider.",
+        "pt-BR": "Dica: check e compare funcionam sem chave de API. Perguntar e Investigar precisam: Configurações → Configurar provider de IA.",
+        "es-ES": "Consejo: check y compare funcionan sin clave de API. Preguntar e Investigar la necesitan: Ajustes → Configurar proveedor de IA.",
+      }[cliLanguage]);
+    }
+  }
   const choice = await promptChoice(copy.guidedQuestion, choices, terminalColorEnabled());
   const color = terminalColorEnabled();
   switch (choice.id) {
+    case "back":
+      await startGuided(root, "main");
+      return;
+    case "more":
+      await startGuided(root, "more");
+      return;
+    case "settings":
+      await startGuided(root, "settings");
+      return;
+    case "api-key":
+      await showConfig(["set", "api-key"]);
+      return;
+    case "model":
+      await showConfig(["set", "model"]);
+      return;
+    case "config":
+      await showConfig([]);
+      return;
+    case "edit-config":
+      await showConfig(["edit"]);
+      return;
     case "criteria":
       await editAcceptance([root]);
       return;
@@ -1205,30 +1253,80 @@ async function applyInterfaceLanguage(language: InterfaceLanguage, json: boolean
   console.log(copy.jsonStable);
 }
 
+function configTarget(project: boolean): string {
+  return project ? resolve(".env") : activeEnvironmentPath(resolve(".env"), userPreferenceEnvironment);
+}
+
+function settingSource(key: string): string {
+  if (conclaveEnvironmentFile.loadedKeys.includes(key)) return conclaveEnvironmentFile.path;
+  if (globalEnvironmentFile.loadedKeys.includes(key)) return globalEnvironmentFile.path;
+  return process.env[key] === undefined ? "" : "environment";
+}
+
+async function readSettingValue(key: string, provided: string | undefined): Promise<string> {
+  if (provided !== undefined) return provided;
+  if (!process.stdin.isTTY) return readApiKeyFromStandardInput();
+  return isSecretKey(key) ? promptSecret(`${key} (hidden)`) : promptLine(key, process.env[key]);
+}
+
+const CONFIG_USAGE = [
+  "Usage:",
+  "  conclave config                     Show current settings (secrets masked)",
+  "  conclave config set <key> [value]   Save a setting (secrets are asked hidden when value is omitted)",
+  "  conclave config get <key>           Print one setting (secrets masked)",
+  "  conclave config unset <key>         Remove a setting",
+  "  conclave config edit                Open the settings file in $EDITOR",
+  "  conclave config path                Print the settings file path",
+  "  conclave config --language <en|pt-BR|es-ES>",
+  "",
+  "Keys: " + Object.keys(CONFIG_KEY_ALIASES).join(", ") + ", or any CONCLAVE_* name.",
+  "Add --project to write ./.env instead of your user settings.",
+].join("\n");
+
 async function showConfig(args: readonly string[]): Promise<void> {
-  let requestedLanguage: InterfaceLanguage | undefined;
-  let json = false;
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === "--json") {
-      json = true;
-      continue;
-    }
-    if (argument === "--language") {
-      const value = args[index + 1];
-      if (value === undefined || value.startsWith("--")) {
-        throw new Error("--language requires en, pt-BR, or es-ES");
-      }
-      requestedLanguage = parseInterfaceLanguage(value);
-      index += 1;
-      continue;
-    }
-    throw new Error(`Unknown config option: ${argument ?? ""}`);
-  }
-  if (requestedLanguage !== undefined) {
-    await applyInterfaceLanguage(requestedLanguage, json);
+  const json = args.includes("--json");
+  const project = args.includes("--project");
+  const rest = args.filter((argument) => argument !== "--json" && argument !== "--project");
+  const [action, name, ...values] = rest;
+  if (action === "--language") {
+    if (name === undefined || name.startsWith("--")) throw new Error("--language requires en, pt-BR, or es-ES");
+    await applyInterfaceLanguage(parseInterfaceLanguage(name), json);
     return;
   }
+  if (action === "help" || action === "--help") { console.log(CONFIG_USAGE); return; }
+  if (action === "path") { console.log(configTarget(project)); return; }
+  if (action === "edit") { await editConfigFile(configTarget(project)); return; }
+  if (action === "set" || action === "get" || action === "unset") {
+    if (name === undefined) throw new Error(`config ${action} requires a key.\n\n${CONFIG_USAGE}`);
+    const key = resolveConfigKey(name);
+    if (action === "get") {
+      const value = process.env[key];
+      if (json) { print({ key, set: value !== undefined, value: value === undefined ? null : maskValue(key, value), source: settingSource(key) || null }, true); return; }
+      console.log(value === undefined ? `${key} is not set` : maskValue(key, value));
+      return;
+    }
+    const path = configTarget(project);
+    if (action === "unset") {
+      await updateConclaveEnvironment(path, { [key]: undefined });
+      if (json) { print({ key, removed: true, configFile: path }, true); return; }
+      console.log(`✓ Removed ${key} from ${path}`);
+      return;
+    }
+    const value = validateConfigValue(key, await readSettingValue(key, values.length === 0 ? undefined : values.join(" ")));
+    if (value === "") throw new Error(`${key} cannot be empty; use \`conclave config unset ${name}\` to remove it`);
+    // A provider only takes effect with a matching mode; infer it so one command is enough.
+    const impliedMode = key === "CONCLAVE_PROVIDER" && process.env["CONCLAVE_MODE"] === undefined
+      ? { CONCLAVE_MODE: ["ollama", "lm-studio"].includes(value) ? "local" : "api" }
+      : {};
+    await updateConclaveEnvironment(path, { ...impliedMode, [key]: value });
+    if (json) { print({ key, saved: true, value: maskValue(key, value), configFile: path }, true); return; }
+    console.log(`✓ ${key} = ${maskValue(key, value)}`);
+    console.log(`  saved in ${path}`);
+    if (key === "CONCLAVE_API_KEY" || key === "CONCLAVE_PROVIDER" || key === "CONCLAVE_MODEL") console.log("  Test it with `conclave provider-check`.");
+    return;
+  }
+  if (action !== undefined) throw new Error(`Unknown config action: ${action}\n\n${CONFIG_USAGE}`);
+
   const credentials = new EnvironmentCredentialSource();
   const provider = describeRuntimeConfig(loadRuntimeConfig(), credentials);
   const preferences = loadedUserPreferences ?? await loadUserPreferences();
@@ -1237,6 +1335,14 @@ async function showConfig(args: readonly string[]): Promise<void> {
     userPreferenceEnvironment,
     preferences.exists,
   );
+  const shownKeys = [...new Set([
+    ...PRIMARY_CONFIG_KEYS,
+    ...Object.keys(process.env).filter((key) => key.startsWith("CONCLAVE_")).sort(),
+  ])];
+  const settings = shownKeys.map((key) => {
+    const value = process.env[key];
+    return { key, set: value !== undefined, value: value === undefined ? null : maskValue(key, value), source: settingSource(key) || null };
+  });
   const report = {
     interface: {
       language: effective.language,
@@ -1247,10 +1353,16 @@ async function showConfig(args: readonly string[]): Promise<void> {
       jsonFieldsLanguage: "en",
     },
     provider,
+    settings,
     environmentFile: {
       path: conclaveEnvironmentFile.path,
       duplicateKeys: conclaveEnvironmentFile.duplicateKeys,
     },
+    userEnvironmentFile: {
+      path: globalEnvironmentFile.path,
+      duplicateKeys: globalEnvironmentFile.duplicateKeys,
+    },
+    writesTo: configTarget(false),
   };
   if (json) {
     print(report, true);
@@ -1259,17 +1371,37 @@ async function showConfig(args: readonly string[]): Promise<void> {
   const copy = interfaceCopy(cliLanguage);
   console.log(copy.configTitle);
   console.log(`${copy.interfaceLanguage}: ${report.interface.languageName} (${report.interface.language})`);
-  console.log(`${copy.preferencesFile}: ${report.interface.preferencesFile}`);
   console.log(`${copy.providerConfig}: ${provider.mode} · ${provider.provider}`);
-  if (conclaveEnvironmentFile.duplicateKeys.length > 0) {
-    // The last definition wins silently, so an earlier block that still reads as active is
-    // the usual reason a provider or model refuses to change.
-    console.log(
-      `\nWarning: ${conclaveEnvironmentFile.path} defines ${String(conclaveEnvironmentFile.duplicateKeys.length)} key(s) more than once; the last definition wins: ` +
-      conclaveEnvironmentFile.duplicateKeys.join(", "),
-    );
+  console.log("");
+  for (const setting of settings) {
+    const origin = setting.source === null || setting.source === "environment" ? setting.source ?? "" : setting.source === globalEnvironmentFile.path ? "user" : "project";
+    console.log(`  ${setting.key.padEnd(28)} ${(setting.value ?? "—").padEnd(28)} ${origin}`);
   }
-  console.log(copy.jsonStable);
+  console.log("");
+  console.log(`User settings:    ${globalEnvironmentFile.path}`);
+  console.log(`Project settings: ${conclaveEnvironmentFile.path}${readConclaveEnvironmentFile(conclaveEnvironmentFile.path).size === 0 ? " (not used)" : ""}`);
+  console.log(`${copy.preferencesFile}: ${report.interface.preferencesFile}`);
+  for (const file of [conclaveEnvironmentFile, globalEnvironmentFile]) {
+    if (file.duplicateKeys.length > 0) {
+      // The last definition wins silently, so an earlier block that still reads as active is
+      // the usual reason a provider or model refuses to change.
+      console.log(
+        `\nWarning: ${file.path} defines ${String(file.duplicateKeys.length)} key(s) more than once; the last definition wins: ` +
+        file.duplicateKeys.join(", "),
+      );
+    }
+  }
+  console.log("\nChange a value: conclave config set <key> [value]   ·   All options: conclave config help");
+}
+
+async function editConfigFile(path: string): Promise<void> {
+  if (readConclaveEnvironmentFile(path).size === 0) await updateConclaveEnvironment(path, {});
+  const editor = process.env["VISUAL"] ?? process.env["EDITOR"] ?? (process.platform === "win32" ? "notepad" : "vi");
+  if (!process.stdin.isTTY) { console.log(path); return; }
+  console.log(`Opening ${path} with ${editor}…`);
+  const [command = editor, ...editorArgs] = editor.split(" ").filter((part) => part !== "");
+  const code = await runExternalCommand(command, [...editorArgs, path]);
+  if (code !== 0) throw new Error(`${editor} exited with code ${String(code)}`);
 }
 
 interface InitArguments {
@@ -1290,10 +1422,14 @@ function parseInitArguments(args: readonly string[]): InitArguments {
   let reasoning: "full" | "fast" | undefined;
   let apiKeyStdin = false;
   let noKey = false;
-  let envFile = resolve(".env");
+  let envFile: string | undefined;
   let json = false;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
+    if (argument === "--project") {
+      envFile = resolve(".env");
+      continue;
+    }
     if (argument === "--api-key-stdin") {
       apiKeyStdin = true;
       continue;
@@ -1327,7 +1463,7 @@ function parseInitArguments(args: readonly string[]): InitArguments {
     index += 1;
   }
   if (apiKeyStdin && noKey) throw new Error("--api-key-stdin and --no-key cannot be used together");
-  return { provider, profile, model, reasoning, apiKeyStdin, noKey, envFile, json };
+  return { provider, profile, model, reasoning, apiKeyStdin, noKey, envFile: envFile ?? configTarget(false), json };
 }
 
 async function promptLine(label: string, fallback?: string): Promise<string> {
@@ -1420,45 +1556,41 @@ async function initializeConclave(args: readonly string[]): Promise<void> {
   const parsed = parseInitArguments(args);
   const interactive = process.stdin.isTTY && process.stdout.isTTY;
   const color = terminalColorEnabled();
-  const providerChoices = (["openai", "openrouter", "anthropic"] as const).map((id) => {
+  const providerChoices = (["opencode-go", "openai", "openrouter", "anthropic"] as const).map((id) => {
     const guide = providerSetupGuide(id, cliLanguage);
     return { id, label: guide.label, description: guide.summary };
   });
   if (interactive && !parsed.json) console.log(renderSetupBanner(color, cliLanguage));
   const provider = parsed.provider ?? (await promptChoice(
-    renderSetupStep(1, 4, "Provider", "Choose who should power optional Ask and Investigate reasoning. Review never uses this key.", color),
+    renderSetupStep(1, 3, "Provider", "Choose who powers Ask and Investigate. Review and check never use this key. Enter = recommended.", color),
     providerChoices,
     color,
   )).id;
   if (interactive && parsed.provider !== undefined && !parsed.json) {
-    console.log(renderSetupStep(1, 4, "Provider", `${providerSetupGuide(provider, cliLanguage).label} selected from --provider.`, color));
+    console.log(renderSetupStep(1, 3, "Provider", `${providerSetupGuide(provider, cliLanguage).label} selected from --provider.`, color));
   }
   const selectedProfile = interactive && parsed.profile === undefined && parsed.model === undefined
     ? await promptChoice(
-      renderSetupStep(2, 4, "Model profile", "Start from a maintained profile or pass --model for an exact provider model ID.", color),
+      renderSetupStep(2, 3, "Model", "Start from a maintained profile, or later run `conclave config set model <id>`.", color),
       providerProfiles(provider),
       color,
     )
     : undefined;
-  const selectedStyle = interactive && parsed.reasoning === undefined
-    ? await promptChoice(
-      renderSetupStep(3, 4, "Reasoning", "Choose the depth used by optional API-backed repository reasoning.", color),
-      REASONING_STYLES,
-      color,
-    )
-    : undefined;
+  // Keeping the saved key is the common case when only the model changes.
+  const existingKey = process.env["CONCLAVE_PROVIDER"] === provider ? process.env["CONCLAVE_API_KEY"] : undefined;
   let apiKey: string | undefined;
   if (interactive && !parsed.json) {
-    console.log(renderSetupStep(4, 4, "Credentials", "The value is hidden and saved only in the local configuration file.", color));
+    console.log(renderSetupStep(3, 3, "API key", `Hidden, saved only in ${parsed.envFile}.`, color));
     console.log(renderProviderGuide(provider, color, cliLanguage));
   }
   if (!parsed.noKey) {
     apiKey = parsed.apiKeyStdin
       ? await readApiKeyFromStandardInput()
-      : await promptSecret("Paste API key (hidden)");
+      : await promptSecret(existingKey === undefined ? "Paste API key (hidden)" : `Paste API key (hidden, Enter keeps ${maskValue("CONCLAVE_API_KEY", existingKey)})`);
+    if (apiKey === "" && existingKey !== undefined) apiKey = existingKey;
   }
   const profileId = parsed.profile ?? selectedProfile?.id;
-  const reasoningStyleId = parsed.reasoning ?? selectedStyle?.id;
+  const reasoningStyleId = parsed.reasoning;
   const setup = createSetupConfiguration({
     provider,
     ...(profileId === undefined ? {} : { profileId }),
@@ -1466,7 +1598,16 @@ async function initializeConclave(args: readonly string[]): Promise<void> {
     ...(reasoningStyleId === undefined ? {} : { reasoningStyleId }),
     ...(apiKey === undefined ? {} : { apiKey }),
   });
-  const write = await writeConclaveEnvironment(parsed.envFile, setup.environment);
+  // Switching provider must not inherit an endpoint or per-role models from the previous one.
+  const staleProviderKeys = Object.fromEntries([
+    "CONCLAVE_BASE_URL",
+    "CONCLAVE_FALLBACK_MODEL",
+    ...["investigator", "skeptic", "architect", "verifier", "judge"].flatMap((role) => [
+      `CONCLAVE_${role.toUpperCase()}_PROVIDER`,
+      `CONCLAVE_${role.toUpperCase()}_MODEL`,
+    ]),
+  ].map((key) => [key, undefined]));
+  const write = await updateConclaveEnvironment(parsed.envFile, { ...staleProviderKeys, ...setup.environment });
   const report = {
     configFile: write.path,
     updated: write.updated,
@@ -1475,7 +1616,7 @@ async function initializeConclave(args: readonly string[]): Promise<void> {
     reasoningPreset: setup.reasoningPreset,
     credentialSaved: setup.credentialSaved,
     validation: "conclave review is deterministic and never sends repository data or API keys to a model",
-    next: setup.credentialSaved ? "Run `conclave provider-check` to test the selected provider." : "Set CONCLAVE_API_KEY later, then run `conclave provider-check`.",
+    next: setup.credentialSaved ? "Run `conclave provider-check` to test the selected provider." : "Add the key later with `conclave config set api-key`, then run `conclave provider-check`.",
   };
   if (parsed.json) {
     print(report, true);
@@ -1494,7 +1635,7 @@ function showModels(args: readonly string[]): void {
     throw new Error("models accepts only --provider and --json");
   }
   const providers: readonly GuidedProviderId[] = requested === undefined
-    ? ["openai", "openrouter", "anthropic"]
+    ? ["opencode-go", "openai", "openrouter", "anthropic"]
     : [requested as GuidedProviderId];
   const report = providers.map((provider) => ({ provider, profiles: providerProfiles(provider) }));
   if (args.includes("--json")) {

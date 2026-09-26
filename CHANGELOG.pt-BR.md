@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.15.0] — 2026-09-26
+
+- Configurações editáveis para instalação global: `conclave config set|get|unset|edit|path` com segredos mascarados, configurações por usuário em ~/.config/conclave/credentials.env, `conclave init` em três passos que mantém a chave salva, OpenCode Go no wizard e um menu guiado mais curto com submenus Mais e Configurações.
+
 ## [0.14.1] — 2026-09-26
 
 - Mix de modelos por papel com modelo de fallback, provider judge SystemOne opcional, OpenCode Go como padrão recomendado de baixo custo e um product lab reproduzível para medir custo e qualidade das reviews.

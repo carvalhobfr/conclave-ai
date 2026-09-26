@@ -93,8 +93,8 @@ describe("CLI user preferences", () => {
     expect(portuguese).toContain("conclave symbol . SuperValidator");
 
     const spanish = cliHelp("es-ES", "config");
-    expect(spanish).toContain("El inglés es el idioma predeterminado");
-    expect(spanish).toContain("conclave config --language es-ES");
+    expect(spanish).toContain("Precedencia: entorno del shell");
+    expect(spanish).toContain("conclave config set api-key");
 
     const commands = [
       "scan", "index", "search", "retrieve", "symbol", "text", "graph", "path",
