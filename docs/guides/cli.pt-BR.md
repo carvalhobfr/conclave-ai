@@ -80,6 +80,23 @@ conclave criteria .
 
 Salva o objetivo e os critérios que `check` e `review` devem cumprir. Veja [aceite](../acceptance.md).
 
+### Opções de `check`, `compare` e `review`
+
+| Opção | Significado |
+| --- | --- |
+| `--base <ref>` | Base da comparação (padrão: base do pull request detectada) |
+| `--head <ref>` | Ref de destino numa comparação entre duas refs (`compare`, `review --base`) |
+| `--objective "<texto>"` | O que a mudança deve entregar; fica fixo durante a série de review |
+| `--contract <arquivo>` | JSON com caminhos permitidos e claims de conclusão a verificar |
+| `--previous-report <arquivo>` | Continua uma série a partir de uma saída `--json` anterior |
+| `--new-series` | Aceita uma nova baseline de propósito (não junto com `--previous-report`) |
+| `--series <id>` | Confirma o ID esperado da série |
+| `--receipt <arquivo>` | Anexa um resultado externo de teste ou build (repetível) |
+| `--attested-receipt <arquivo>` | Anexa um recibo atestado pelo CI (com `--attestation-repository` e `--attestation-workflow`) |
+| `--working`, `--staged`, `--commit <sha>` | Só no `review`: escolhe uma fonte exata |
+| `--json` | Mostra `{ summary, report, handoff }` em vez de texto |
+| `--debug` | Mostra diagnósticos extras |
+
 ### Códigos de saída
 
 | Saída | Veredito |
@@ -133,6 +150,31 @@ Chaves curtas: `provider`, `model`, `api-key`, `base-url`, `reasoning`, `mode`, 
 
 As configurações do usuário são gravadas com permissão só do dono (`0600`), então uma instalação global funciona em qualquer repositório. Use `--project` em `init` ou `config set` para gravar em `./.env`. `CONCLAVE_CONFIG_HOME` muda a pasta de configurações.
 
+### Modelos locais
+
+Mantenha tudo na sua máquina com [Ollama](https://ollama.com) ou [LM Studio](https://lmstudio.ai):
+
+```bash
+ollama pull qwen2.5-coder:3b
+conclave config set provider ollama         # também muda o mode para local
+conclave config set model qwen2.5-coder:3b
+conclave provider-check
+```
+
+No LM Studio, use `provider lm-studio` e o ID de modelo que ele mostra. Endpoints locais personalizados vão em `base-url` e precisam usar um endereço loopback.
+
+### Modelos por papel
+
+Ask e Investigate usam até cinco papéis: investigator, skeptic, architect, verifier e judge. Cada um pode ter o próprio modelo, e um modelo de fallback entra quando o principal falha:
+
+```bash
+conclave config set judge-model deepseek-v4-pro
+conclave config set fallback-model deepseek-v4.1-flash
+conclave config set reasoning free-like      # rápido: pula o papel architect
+```
+
+Um papel em outro provider precisa da chave própria desse provider, por exemplo `CONCLAVE_OPENCODE_ZEN_API_KEY`. Os Conclaves salvos no cockpit configuram isso para você.
+
 ### Idioma da interface
 
 ```bash
@@ -152,6 +194,39 @@ conclave update --global   # atualiza uma instalação global
 conclave update --local    # atualiza a dependência do projeto
 conclave doctor .
 ```
+
+## Variáveis de ambiente
+
+Toda configuração pode vir do shell, de um `.env` do projeto ou das configurações do usuário (`conclave config`).
+
+| Variável | Padrão | Para que serve |
+| --- | --- | --- |
+| `CONCLAVE_MODE` | `free` | `api`, `local` ou `free` |
+| `CONCLAVE_PROVIDER` | — | `opencode-go`, `openai`, `anthropic`, `openrouter`, `opencode-zen`, `ollama`, `lm-studio`, `openai-compatible` |
+| `CONCLAVE_MODEL` | — | ID de modelo para todos os papéis |
+| `CONCLAVE_API_KEY` | — | Chave do provider |
+| `CONCLAVE_BASE_URL` | padrão do provider | Endpoint (HTTPS, ou loopback no modo local) |
+| `CONCLAVE_REASONING_PRESET` | conforme o mode | `full`, `free-like` (mais rápido) ou `local`; `full` por padrão no mode api |
+| `CONCLAVE_FALLBACK_MODEL` | — | Modelo usado quando o principal falha |
+| `CONCLAVE_<PAPEL>_PROVIDER`, `CONCLAVE_<PAPEL>_MODEL`, `CONCLAVE_<PAPEL>_FALLBACK_MODEL` | valores principais | Por papel; os papéis são `INVESTIGATOR`, `SKEPTIC`, `ARCHITECT`, `VERIFIER`, `JUDGE` |
+| `CONCLAVE_<PROVIDER>_API_KEY` | — | Chave usada só por aquele provider, ex.: `CONCLAVE_OPENCODE_ZEN_API_KEY` |
+| `CONCLAVE_EMBEDDING_MODE` | `feature-hash` | `openai-compatible` ativa embeddings aprendidos na busca |
+| `CONCLAVE_EMBEDDING_MODEL`, `_BASE_URL`, `_DIMENSIONS`, `_API_KEY` | — | Configuração dos embeddings aprendidos |
+| `CONCLAVE_LANGUAGE` | preferência salva | `en`, `pt-BR` ou `es-ES` para um processo |
+| `CONCLAVE_CONFIG_HOME` | `~/.config/conclave` | Pasta de configurações |
+| `CONCLAVE_WEB_PORT` | `4317` | Porta ao rodar o servidor web diretamente |
+| `CONCLAVE_TIMEOUT_MS` | `300000` | Tempo limite do runner da skill de agente |
+| `CONCLAVE_CLI_PATH`, `CONCLAVE_BIN` | — | Aponta a skill de agente para um Conclave específico |
+
+## Arquivos que o Conclave grava
+
+| Caminho | Conteúdo | Commitar? |
+| --- | --- | --- |
+| `.conclave/` | Cache do mapa de código, histórico de reviews, critérios, feedback de achados | Não, adicione ao `.gitignore` |
+| `~/.config/conclave/credentials.env` | Configurações e chaves de provider (`0600`) | Nunca |
+| `~/.config/conclave/config.json` | Idioma da interface | — |
+| `.claude/skills/`, `.agents/skills/` | Skill de agente, criada por `conclave setup` | Sim, para compartilhar com o time |
+| `.github/workflows/conclave-review.yml` | Workflow de pull request, criado por `conclave setup` | Sim |
 
 ## Comandos avançados
 

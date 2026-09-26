@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.15.4] — 2026-09-26
+
+- Complete documentation: a README with contents, real example output, recipes, privacy table, comparison, FAQ, and troubleshooting; the CLI guide adds every check option, local models, per-role models, all environment variables, and the files Conclave writes. `conclave <command> --help` now prints that command's help.
+
 ## [0.15.3] — 2026-09-26
 
 - Documentation reorganized by product: a short README with a 30-second start, plus separate CLI, cockpit, agent skill, GitHub Actions, and how-it-works guides in English and Portuguese.

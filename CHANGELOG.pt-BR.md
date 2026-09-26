@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.15.4] — 2026-09-26
+
+- Documentação completa: README com índice, saída real de exemplo, receitas, tabela de privacidade, comparação, perguntas frequentes e solução de problemas; o guia da CLI agora traz todas as opções do check, modelos locais, modelos por papel, todas as variáveis de ambiente e os arquivos que o Conclave grava. `conclave <comando> --help` agora mostra a ajuda do comando.
+
 ## [0.15.3] — 2026-09-26
 
 - Documentação reorganizada por produto: README curto com início em 30 segundos e guias separados de CLI, cockpit, skill de agente, GitHub Actions e funcionamento, em inglês e português.

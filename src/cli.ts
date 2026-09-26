@@ -1835,6 +1835,11 @@ async function main(): Promise<void> {
     await startGuided();
     return;
   }
+  // `conclave <command> --help` is what most people try first; answer it instead of failing.
+  if (command !== "help" && (args.includes("--help") || args.includes("-h"))) {
+    console.log(cliHelp(cliLanguage, command));
+    return;
+  }
   switch (command) {
     case "--version":
     case "-v":

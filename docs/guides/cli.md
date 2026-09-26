@@ -80,6 +80,23 @@ conclave criteria .
 
 Saves the objective and criteria that `check` and `review` must satisfy. See [acceptance](../acceptance.md).
 
+### Options for `check`, `compare`, and `review`
+
+| Option | Meaning |
+| --- | --- |
+| `--base <ref>` | Base to compare against (default: detected pull-request base) |
+| `--head <ref>` | Target ref for a two-ref comparison (`compare`, `review --base`) |
+| `--objective "<text>"` | What the change must deliver; frozen across a review series |
+| `--contract <file>` | JSON with allowed paths and completion claims to verify |
+| `--previous-report <file>` | Continue a review series from an earlier `--json` output |
+| `--new-series` | Accept a new baseline on purpose (not with `--previous-report`) |
+| `--series <id>` | Assert the expected series ID |
+| `--receipt <file>` | Attach an external test or build result (repeatable) |
+| `--attested-receipt <file>` | Attach a CI-attested receipt (with `--attestation-repository` and `--attestation-workflow`) |
+| `--working`, `--staged`, `--commit <sha>` | `review` only: pick an exact source |
+| `--json` | Print `{ summary, report, handoff }` instead of text |
+| `--debug` | Print extra diagnostics |
+
 ### Exit codes
 
 | Exit | Verdict |
@@ -133,6 +150,31 @@ Short keys: `provider`, `model`, `api-key`, `base-url`, `reasoning`, `mode`, `fa
 
 User settings are written with owner-only permissions (`0600`), so a global install works in every repository. Add `--project` to `init` or `config set` to write `./.env` instead. `CONCLAVE_CONFIG_HOME` moves the settings folder.
 
+### Local models
+
+Keep everything on your machine with [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai):
+
+```bash
+ollama pull qwen2.5-coder:3b
+conclave config set provider ollama         # also sets mode to local
+conclave config set model qwen2.5-coder:3b
+conclave provider-check
+```
+
+For LM Studio use `provider lm-studio` and the model ID it shows. Custom local endpoints go in `base-url` and must use a loopback address.
+
+### Per-role models
+
+Ask and Investigate run up to five roles: investigator, skeptic, architect, verifier, and judge. Each can use its own model, and a fallback model steps in when the main one fails:
+
+```bash
+conclave config set judge-model deepseek-v4-pro
+conclave config set fallback-model deepseek-v4.1-flash
+conclave config set reasoning free-like      # fast: skip the architect role
+```
+
+A role on a different provider needs that provider's own key, for example `CONCLAVE_OPENCODE_ZEN_API_KEY`. The cockpit's saved Conclaves set these for you.
+
 ### Interface language
 
 ```bash
@@ -152,6 +194,39 @@ conclave update --global   # update a global install
 conclave update --local    # update a project dependency
 conclave doctor .
 ```
+
+## Environment variables
+
+Every setting can come from the shell, a project `.env`, or user settings (`conclave config`).
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CONCLAVE_MODE` | `free` | `api`, `local`, or `free` |
+| `CONCLAVE_PROVIDER` | — | `opencode-go`, `openai`, `anthropic`, `openrouter`, `opencode-zen`, `ollama`, `lm-studio`, `openai-compatible` |
+| `CONCLAVE_MODEL` | — | Model ID for every role |
+| `CONCLAVE_API_KEY` | — | Provider key |
+| `CONCLAVE_BASE_URL` | provider default | Endpoint (HTTPS, or loopback in local mode) |
+| `CONCLAVE_REASONING_PRESET` | by mode | `full`, `free-like` (faster), or `local`; defaults to `full` in api mode |
+| `CONCLAVE_FALLBACK_MODEL` | — | Model used when the main one fails |
+| `CONCLAVE_<ROLE>_PROVIDER`, `CONCLAVE_<ROLE>_MODEL`, `CONCLAVE_<ROLE>_FALLBACK_MODEL` | main values | Per-role overrides; roles are `INVESTIGATOR`, `SKEPTIC`, `ARCHITECT`, `VERIFIER`, `JUDGE` |
+| `CONCLAVE_<PROVIDER>_API_KEY` | — | Key used only for that provider, e.g. `CONCLAVE_OPENCODE_ZEN_API_KEY` |
+| `CONCLAVE_EMBEDDING_MODE` | `feature-hash` | `openai-compatible` enables learned embeddings for search |
+| `CONCLAVE_EMBEDDING_MODEL`, `_BASE_URL`, `_DIMENSIONS`, `_API_KEY` | — | Learned embedding settings |
+| `CONCLAVE_LANGUAGE` | saved preference | `en`, `pt-BR`, or `es-ES` for one process |
+| `CONCLAVE_CONFIG_HOME` | `~/.config/conclave` | Settings folder |
+| `CONCLAVE_WEB_PORT` | `4317` | Port when running the web server directly |
+| `CONCLAVE_TIMEOUT_MS` | `300000` | Agent skill runner timeout |
+| `CONCLAVE_CLI_PATH`, `CONCLAVE_BIN` | — | Point the agent skill at a specific Conclave |
+
+## Files Conclave writes
+
+| Path | Contents | Commit it? |
+| --- | --- | --- |
+| `.conclave/` | Code map cache, review history, criteria, finding feedback | No, add it to `.gitignore` |
+| `~/.config/conclave/credentials.env` | Provider settings and keys (`0600`) | Never |
+| `~/.config/conclave/config.json` | Interface language | — |
+| `.claude/skills/`, `.agents/skills/` | Agent skill, from `conclave setup` | Yes, to share with your team |
+| `.github/workflows/conclave-review.yml` | Pull-request workflow, from `conclave setup` | Yes |
 
 ## Advanced commands
 
