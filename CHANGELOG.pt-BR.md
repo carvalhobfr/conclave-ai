@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.15.3] — 2026-09-26
+
+- Documentação reorganizada por produto: README curto com início em 30 segundos e guias separados de CLI, cockpit, skill de agente, GitHub Actions e funcionamento, em inglês e português.
+
 ## [0.15.2] — 2026-09-26
 
 - Skill de agente mais segura: o runner só executa um dist/cli.js que pertence ao conclave-ai, usa um conclave global no PATH antes do npx, permite 300 s por padrão (CONCLAVE_TIMEOUT_MS) e a skill começa por veredito, achado principal, próxima ação e limites. A referência de schema agora cobre v2 a v5.

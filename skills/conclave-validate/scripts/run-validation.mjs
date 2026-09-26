@@ -101,7 +101,7 @@ async function resolveCommand(repository) {
   // A global `npm install -g conclave-ai` avoids a network fetch on every review.
   const installed = await commandOnPath("conclave");
   if (installed !== undefined) return { command: installed, prefix: [] };
-  return { command: "npx", prefix: ["--yes", "--package=conclave-ai@0.15.2", "conclave"] };
+  return { command: "npx", prefix: ["--yes", "--package=conclave-ai@0.15.3", "conclave"] };
 }
 
 function commandArguments(parsed) {

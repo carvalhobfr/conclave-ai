@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.15.3] — 2026-09-26
+
+- Documentation reorganized by product: a short README with a 30-second start, plus separate CLI, cockpit, agent skill, GitHub Actions, and how-it-works guides in English and Portuguese.
+
 ## [0.15.2] — 2026-09-26
 
 - Agent skill hardening: the runner only executes a dist/cli.js that belongs to conclave-ai, uses a global conclave on PATH before npx, allows 300 s by default (CONCLAVE_TIMEOUT_MS), and the skill leads with verdict, main finding, next action, and limits. The schema reference now covers v2 through v5.
