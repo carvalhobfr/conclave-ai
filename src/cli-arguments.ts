@@ -21,6 +21,7 @@ export interface ParsedArguments {
   readonly tokens: number;
   readonly graphOperation: GraphOperation;
   readonly debug: boolean;
+  readonly verbose: boolean;
   readonly working: boolean;
   readonly staged: boolean;
   readonly branch: string | undefined;
@@ -59,6 +60,7 @@ export function parseArguments(args: readonly string[]): ParsedArguments {
   let tokens = 6_000;
   let graphOperation: GraphOperation = "neighbors";
   let debug = false;
+  let verbose = false;
   let working = false;
   let staged = false;
   let branch: string | undefined;
@@ -81,6 +83,10 @@ export function parseArguments(args: readonly string[]): ParsedArguments {
     }
     if (argument === "--debug") {
       debug = true;
+      continue;
+    }
+    if (argument === "--verbose" || argument === "-v") {
+      verbose = true;
       continue;
     }
     if (argument === "--working") {
@@ -177,6 +183,7 @@ export function parseArguments(args: readonly string[]): ParsedArguments {
     tokens,
     graphOperation,
     debug,
+    verbose,
     working,
     staged,
     branch,

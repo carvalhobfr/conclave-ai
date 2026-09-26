@@ -14,6 +14,7 @@ describe("CLI argument parser", () => {
       tokens: 6_000,
       graphOperation: "neighbors",
       debug: false,
+      verbose: false,
       working: false,
       staged: false,
       branch: undefined,

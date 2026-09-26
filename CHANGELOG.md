@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.16.0] — 2026-09-26
+
+- Less noise, more languages: `conclave check` now prints a short summary (verdict, top three risks with file and line, next action) and `--verbose` keeps the full report; inline `conclave-ignore` comments turn an intentional warning into an auditable note; "exported behavior changed without a test change" becomes a note in repositories with no tests; Python and Java get the empty-handler and unreleased-resource rules.
+
 ## [0.15.4] — 2026-09-26
 
 - Complete documentation: a README with contents, real example output, recipes, privacy table, comparison, FAQ, and troubleshooting; the CLI guide adds every check option, local models, per-role models, all environment variables, and the files Conclave writes. `conclave <command> --help` now prints that command's help.

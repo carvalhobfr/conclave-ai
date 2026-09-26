@@ -95,7 +95,23 @@ Salva o objetivo e os critérios que `check` e `review` devem cumprir. Veja [ace
 | `--attested-receipt <arquivo>` | Anexa um recibo atestado pelo CI (com `--attestation-repository` e `--attestation-workflow`) |
 | `--working`, `--staged`, `--commit <sha>` | Só no `review`: escolhe uma fonte exata |
 | `--json` | Mostra `{ summary, report, handoff }` em vez de texto |
+| `--verbose` | Mostra o relatório completo em vez do resumo curto |
 | `--debug` | Mostra diagnósticos extras |
+
+### Silenciar um achado intencional
+
+Coloque `conclave-ignore` num comentário na linha do achado ou na linha de cima. Cite uma ou mais regras para ser preciso:
+
+```ts
+try { cache.warm(); } catch {} // conclave-ignore: discarded-error
+```
+
+```python
+# conclave-ignore unreleased-resource
+handle = open(path)
+```
+
+O achado continua no relatório JSON como uma nota que diz onde foi suprimido e deixa de afetar o veredito. Achados bloqueantes não podem ser silenciados assim.
 
 ### Códigos de saída
 

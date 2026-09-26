@@ -2,6 +2,7 @@ import ts from "typescript";
 
 import type { RepositoryCodeIndex } from "../domain/code-index.js";
 import type { ValidationChangedFile, ValidationEvidence } from "../domain/validation.js";
+import { analyzeTextualSourceDefects } from "./source-defects-textual.js";
 
 export interface SourceDefect {
   readonly kind: "unreleased-resource" | "discarded-error" | "inconsistent-key";
@@ -100,10 +101,18 @@ export function analyzeSourceDefects(index: RepositoryCodeIndex, files: readonly
   const defects: SourceDefect[] = [];
   let checksPerformed = 0;
   for (const file of files) {
-    if (file.status === "deleted" || !JS_FAMILY.test(file.path)) continue;
+    if (file.status === "deleted") continue;
     const indexed = index.files[file.path];
     if (indexed === undefined) continue;
     if (file.status !== "added" && file.hunks.length === 0) continue;
+    if (!JS_FAMILY.test(file.path)) {
+      const textual = analyzeTextualSourceDefects(file, indexed.sourceText);
+      if (textual !== undefined) {
+        checksPerformed += 2; // empty handlers and resource release for this file.
+        defects.push(...textual);
+      }
+      continue;
+    }
     checksPerformed += 3; // resource candidates, storage keys, and empty catches for this file.
     const source = ts.createSourceFile(file.path, indexed.sourceText, ts.ScriptTarget.Latest, true);
     const calls: ts.CallExpression[] = [];

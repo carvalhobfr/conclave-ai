@@ -25,6 +25,7 @@ import { assessEscalation } from "./escalation.js";
 import { evaluateEvidenceReceipts } from "./evidence-receipts.js";
 import { evaluateCriteria } from "./acceptance-criteria.js";
 import { analyzeSourceDefects } from "./source-defects.js";
+import { applyInlineSuppressions } from "./finding-suppression.js";
 import {
   createFindingLifecycle,
   createValidationLineage,
@@ -450,12 +451,16 @@ export class SuperValidator {
     deterministicChecks += 1;
     const exportedChangedUnits = changedUnits.filter((unit) => unit.exported);
     const changedTests = changeSet.files.filter((file) => isTestFile(file.path));
+    // A repository without any test file cannot act on "add a test change" per PR; saying it on
+    // every review only trains people to ignore warnings, so it drops to a visible note.
+    const repositoryHasTests = Object.keys(index.files).some((path) => isTestFile(path));
     if (exportedChangedUnits.length > 0 && changedTests.length === 0) {
       findings.push(finding(
         "exported-change-without-tests",
-        "warning",
+        repositoryHasTests ? "warning" : "info",
         "Exported behavior changed without a test change",
-        String(exportedChangedUnits.length) + " exported symbol(s) changed, but the diff contains no test file.",
+        String(exportedChangedUnits.length) + " exported symbol(s) changed, but the diff contains no test file." +
+          (repositoryHasTests ? "" : " The repository has no test files, so this is reported as a note."),
         "Add or identify existing coverage that proves the changed public behavior.",
         exportedChangedUnits.slice(0, 20).map((unit) =>
           evidenceForUnit(unit, "Changed exported symbol without changed test evidence"),
@@ -567,6 +572,7 @@ export class SuperValidator {
       ));
     }
 
+    findings.splice(0, findings.length, ...applyInlineSuppressions(index, findings));
     const verdict = verdictFor(findings, claims);
     const counts = {
       blocking: findings.filter((item) => item.severity === "blocking").length,

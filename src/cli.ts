@@ -12,6 +12,7 @@ import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 
 import { parseArguments, type ParsedArguments } from "./cli-arguments.js";
+import { renderCompactReview } from "./cli-review-output.js";
 import { MultiLanguageCodeParser } from "./code-intelligence/multi-language-parser.js";
 import { describeRuntimeConfig, loadRuntimeConfig } from "./config/runtime-config.js";
 import { loadReasoningConfiguration } from "./config/reasoning-config.js";
@@ -1136,6 +1137,9 @@ async function pullRequestSummary(
     if (effectiveParsed.json) {
       print({ summary, report, handoff }, true);
     } else {
+    if (!effectiveParsed.verbose) {
+      console.log(renderCompactReview(report, summary, cliLanguage, terminalColorEnabled()));
+    } else {
     console.log(`\n${copy.prSummary}: ${summary.title}`);
     console.log(`${copy.comparison}: ${summary.comparison}`);
     console.log(summary.summary);
@@ -1158,6 +1162,7 @@ async function pullRequestSummary(
       console.log(`\n${copy.nextForAgent}:`);
       console.log(handoff.prompt);
       console.log(`\n${copy.fullEvidence}`);
+    }
     }
     if (report.verdict === "block") process.exitCode = 1;
     else if (report.verdict === "inconclusive") process.exitCode = 2;
@@ -1184,6 +1189,7 @@ async function checkRepository(args: readonly string[]): Promise<void> {
   await pullRequestSummary([
     inspection.root,
     ...(parsed.json ? ["--json"] : []),
+    ...(parsed.verbose ? ["--verbose"] : []),
     ...validationProtocolArguments(parsed),
   ], { source, objective });
 }

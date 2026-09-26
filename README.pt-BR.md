@@ -51,7 +51,7 @@ mudança → review do Conclave → agente corrige → Conclave confere de novo 
 - **Feito para coding agents.** Cada review gera um prompt de correção, e a nova conferência distingue progresso real do mesmo diff reenviado, de estagnação e de regressão.
 - **Privado e gratuito por padrão.** O review roda localmente e de forma determinística: sem chave de API, sem código enviado a modelo, sem telemetria.
 - **Somente leitura.** O Conclave nunca altera arquivos, faz commit, push, aprovação ou merge.
-- **Qualquer repositório.** Análise profunda para TypeScript, JavaScript, Python e Java; qualquer outro arquivo de texto ainda conta para escopo e diff.
+- **Qualquer repositório.** Grafo de código e regras de defeito para TypeScript, JavaScript, Python e Java; qualquer outro arquivo de texto ainda conta para escopo e diff.
 
 ## Instalação
 
@@ -82,27 +82,22 @@ conclave check .
 Exemplo de saída para uma branch que adicionou um parâmetro de senha ao `login()`:
 
 ```text
-PR summary: Update src/auth.ts
-Comparison: Current workspace compared with master
-This change updates 1 file, touches 1 code units, and may affect 2 files through local dependencies.
-Verdict: WARN
+Current workspace compared with master · 1 file changed · 2 affected
+WARN  3 risks
 
-Risks:
-- WARNING: Changed code has an empty catch block
-- WARNING: The change affects code outside the diff
-- WARNING: Exported behavior changed without a test change
+  ⚠ src/auth.ts:2  Changed code has an empty catch block
+    → Handle, rethrow or record the error, or document why ignoring this failure is correct.
+  ⚠ src/app.ts:1   The change affects code outside the diff
+    → Review the affected callers, references, imports, and contracts before accepting the resolution.
+  ⚠ src/auth.ts:1  Exported behavior changed without a test change
+    → Add or identify existing coverage that proves the changed public behavior.
 
-Next steps:
-- Review the findings, correct confirmed problems and collect the missing verification evidence.
-
-Next for your coding agent:
-Address the Conclave review findings below.
-  - src/auth.ts:2: Changed code has an empty catch block
-  - src/app.ts:1: explicit named import login
-  - src/auth.ts:1: Changed exported symbol without changed test evidence
+Next: Review the findings, correct confirmed problems and collect the missing verification evidence.
+5 items still need verification
+Agent prompt: conclave handoff .  ·  Details: --verbose  ·  Browser: conclave open .
 ```
 
-O relatório completo também lista o que ainda falta verificar e os desafios independentes que valem a pena rodar, e fica salvo no histórico local. Com `conclave config --language pt-BR`, a saída aparece em português.
+`--verbose` mostra o relatório completo: cada achado com sua evidência, o que ainda falta verificar e os desafios independentes que valem a pena rodar. Todo review também fica salvo no histórico local. Com `conclave config --language pt-BR`, a saída aparece em português.
 
 Não sabe o que rodar? Digite `conclave` para abrir o menu guiado, ou `conclave help <comando>` para qualquer comando.
 
@@ -225,6 +220,9 @@ Sim, licença MIT, e o review não custa nada para rodar. Ask e Investigate cust
 **Meu projeto não é JavaScript. Funciona?**
 Sim. Node.js é só o runtime do Conclave. TypeScript, JavaScript, Python e Java têm o grafo completo; outras linguagens têm evidência de diff, escopo e arquivo.
 
+**Um achado é intencional. Como silencio?**
+Adicione `conclave-ignore` num comentário nessa linha ou na linha de cima, opcionalmente com o nome da regra: `// conclave-ignore: discarded-error` ou `# conclave-ignore unreleased-resource`. O achado continua no JSON como nota e deixa de afetar o veredito. Achados bloqueantes não podem ser silenciados assim.
+
 **Devo commitar `.conclave/`?**
 Não. Adicione `.conclave/` ao `.gitignore`; ele guarda o cache local e o histórico de reviews.
 
@@ -242,6 +240,7 @@ O veredito vem de regras determinísticas com evidência citada, então a mesma 
 | Problema | Solução |
 | --- | --- |
 | `Nothing to review` | Não há mudanças contra a base detectada. Informe uma: `conclave check . --base origin/main`. |
+| O mesmo aviso aparece em todo review | Silencie casos intencionais com um comentário `conclave-ignore` ([perguntas frequentes](#perguntas-frequentes)). "Exported behavior changed without a test change" já vira nota em repositórios sem testes. |
 | Base errada detectada | Use `--base <ref>`. Rode `git fetch` antes se a base for uma branch remota. |
 | `conclave: command not found` | Instale globalmente (`npm install -g conclave-ai`) ou use `npx conclave`. |
 | Ask diz que falta chave ou modelo | Rode `conclave init` e depois `conclave provider-check`. |

@@ -72,7 +72,9 @@ describe("web validation workflow", () => {
     await mkdir(join(root, "src"), { recursive: true });
     await writeFile(join(root, "src", "session.ts"), "export function restoreSession() { return false; }\n");
     await git(root, ["init", "-b", "master"]);
-    await git(root, ["add", "--", "src/session.ts"]);
+    // An existing test file makes "changed exported behavior without a test change" actionable.
+    await writeFile(join(root, "src", "session.test.ts"), "export const placeholder = true;\n");
+    await git(root, ["add", "--", "src/session.ts", "src/session.test.ts"]);
     await git(root, ["commit", "-m", "baseline"]);
     await writeFile(join(root, "src", "session.ts"), "export function restoreSession() { return true; }\n");
 

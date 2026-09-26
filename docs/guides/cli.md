@@ -95,7 +95,23 @@ Saves the objective and criteria that `check` and `review` must satisfy. See [ac
 | `--attested-receipt <file>` | Attach a CI-attested receipt (with `--attestation-repository` and `--attestation-workflow`) |
 | `--working`, `--staged`, `--commit <sha>` | `review` only: pick an exact source |
 | `--json` | Print `{ summary, report, handoff }` instead of text |
+| `--verbose` | Print the full report instead of the short summary |
 | `--debug` | Print extra diagnostics |
+
+### Silencing an intentional finding
+
+Put `conclave-ignore` in a comment on the finding's line or the line above. Name one or more rules to be precise:
+
+```ts
+try { cache.warm(); } catch {} // conclave-ignore: discarded-error
+```
+
+```python
+# conclave-ignore unreleased-resource
+handle = open(path)
+```
+
+The finding stays in the JSON report as a note that says where it was suppressed, and stops affecting the verdict. Blocking findings cannot be silenced inline.
 
 ### Exit codes
 

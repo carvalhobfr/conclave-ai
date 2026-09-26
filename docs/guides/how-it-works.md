@@ -16,11 +16,11 @@ This is useful evidence, not a compiler, test runner, security scanner, runtime 
 
 ## Supported languages
 
-| Language | Functions/classes | Imports | Graph impact | Test-file detection |
-| --- | ---: | ---: | ---: | ---: |
-| TypeScript / JavaScript / TSX / JSX | Yes | Yes | Yes | Yes |
-| Python | Yes | Yes | Yes | Yes |
-| Java | Yes | Yes | Yes | Yes |
+| Language | Functions/classes | Imports | Graph impact | Test-file detection | Defect rules |
+| --- | ---: | ---: | ---: | ---: | --- |
+| TypeScript / JavaScript / TSX / JSX | Yes | Yes | Yes | Yes | Empty catch, listener/interval/subscription without cleanup, inconsistent storage keys |
+| Python | Yes | Yes | Yes | Yes | `except` that only passes, `open`/`connect`/`socket`/`Popen` outside `with` without close |
+| Java | Yes | Yes | Yes | Yes | Empty catch, streams/readers/sockets/connections/executors outside try-with-resources without close |
 
 Other text languages still appear in the Git change and scope evidence, without the same graph depth. See the [roadmap](../../ROADMAP.md).
 

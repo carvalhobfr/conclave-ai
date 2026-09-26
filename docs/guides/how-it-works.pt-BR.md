@@ -16,11 +16,11 @@ Isso é evidência útil, não compilador, test runner, scanner de segurança, p
 
 ## Linguagens suportadas
 
-| Linguagem | Funções/classes | Imports | Grafo de impacto | Detecção de testes |
-| --- | ---: | ---: | ---: | ---: |
-| TypeScript / JavaScript / TSX / JSX | Sim | Sim | Sim | Sim |
-| Python | Sim | Sim | Sim | Sim |
-| Java | Sim | Sim | Sim | Sim |
+| Linguagem | Funções/classes | Imports | Grafo de impacto | Detecção de testes | Regras de defeito |
+| --- | ---: | ---: | ---: | ---: | --- |
+| TypeScript / JavaScript / TSX / JSX | Sim | Sim | Sim | Sim | Catch vazio, listener/interval/subscription sem limpeza, chaves de storage inconsistentes |
+| Python | Sim | Sim | Sim | Sim | `except` que só faz `pass`, `open`/`connect`/`socket`/`Popen` fora de `with` sem close |
+| Java | Sim | Sim | Sim | Sim | Catch vazio, streams/readers/sockets/conexões/executors fora de try-with-resources sem close |
 
 Outras linguagens textuais aparecem no diff e na evidência de escopo, sem a mesma profundidade do grafo. Veja o [roadmap](../../ROADMAP.md).
 

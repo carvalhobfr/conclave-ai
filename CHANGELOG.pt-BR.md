@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.16.0] — 2026-09-26
+
+- Menos ruído, mais linguagens: `conclave check` agora mostra um resumo curto (veredito, até três riscos com arquivo e linha, próxima ação) e `--verbose` mantém o relatório completo; comentários `conclave-ignore` transformam um aviso intencional numa nota auditável; "exported behavior changed without a test change" vira nota em repositórios sem testes; Python e Java ganham as regras de handler vazio e recurso sem liberação.
+
 ## [0.15.4] — 2026-09-26
 
 - Documentação completa: README com índice, saída real de exemplo, receitas, tabela de privacidade, comparação, perguntas frequentes e solução de problemas; o guia da CLI agora traz todas as opções do check, modelos locais, modelos por papel, todas as variáveis de ambiente e os arquivos que o Conclave grava. `conclave <comando> --help` agora mostra a ajuda do comando.
