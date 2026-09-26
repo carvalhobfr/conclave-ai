@@ -78,7 +78,8 @@
     "test:browser": "node scripts/test-browser.mjs",
     "eval:package": "node scripts/evaluate-package.mjs",
     "eval:product": "node scripts/evaluate-product.mjs",
-    "release:bump": "node scripts/bump-version.mjs"
+    "release:bump": "node scripts/bump-version.mjs",
+    "release:tag": "node scripts/release-tag.mjs"
   },
   "dependencies": {
     "ignore": "7.0.6",

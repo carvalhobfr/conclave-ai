@@ -60,4 +60,4 @@ for (const [path, note] of [["CHANGELOG.md", noteEn], ["CHANGELOG.pt-BR.md", not
   });
 }
 
-console.log(`conclave-ai ${current} → ${next}`);
+console.log(`conclave-ai ${current} → ${next}\nNext: commit, then \`npm run release:tag\` to publish through GitHub Actions.`);
