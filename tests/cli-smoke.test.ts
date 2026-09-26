@@ -58,7 +58,7 @@ function runCli(args: readonly string[], cwd: string): Promise<CliResult> {
       process.execPath,
       [CLI, ...args],
       // A fresh HOME keeps the developer's own CLI language preference out of the assertions.
-      { cwd, env: { ...process.env, HOME: cwd, USERPROFILE: cwd, CONCLAVE_LANGUAGE: "en" } },
+      { cwd, env: { ...process.env, HOME: cwd, USERPROFILE: cwd, CONCLAVE_LANGUAGE: "en", CONCLAVE_CONFIG_HOME: join(cwd, ".conclave-user") } },
       (error, stdout, stderr) => {
         if (error !== null && typeof error.code !== "number") {
           reject(error instanceof Error ? error : new Error("The CLI could not be started"));
@@ -152,4 +152,39 @@ it.skipIf(!built)("check does not silently drop requested attestation verificati
   const result = await runCli(["check", root, "--attested-receipt", "missing.json", "--json"], root);
   expect(result.code).not.toBe(0);
   expect(result.stderr).toContain("Attested receipts require");
+});
+
+describe.skipIf(!built)("CLI guidance", () => {
+  it("suggests the closest command for a typo", async () => {
+    const root = await repository();
+    const result = await runCli(["chek", "."], root);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("did you mean `conclave check`?");
+  });
+
+  it("resets provider-specific settings only when the provider actually changes", async () => {
+    const root = await repository();
+    await runCli(["config", "set", "base-url", "https://opencode.ai/zen/go/v1"], root);
+    await runCli(["config", "set", "provider", "opencode-go"], root);
+    const kept = await runCli(["config", "get", "base-url"], root);
+    expect(kept.stdout.trim()).toBe("https://opencode.ai/zen/go/v1");
+    const switched = await runCli(["config", "set", "provider", "ollama"], root);
+    expect(switched.stdout).toContain("Endpoint and per-role models were reset");
+    expect((await runCli(["config", "get", "base-url"], root)).stdout).toContain("is not set");
+    expect((await runCli(["config", "get", "mode"], root)).stdout.trim()).toBe("local");
+  });
+
+  it("does not claim to remove a setting that was never saved", async () => {
+    const root = await repository();
+    const result = await runCli(["config", "unset", "model"], root);
+    expect(result.stdout).toContain("is not set");
+  });
+
+  it("explains a repository without commits", async () => {
+    const root = await mkdtemp(join(tmpdir(), "conclave-cli-empty-"));
+    roots.push(root);
+    await git(root, ["init", "-b", "main"]);
+    const result = await runCli(["check", "."], root);
+    expect(result.stderr).toContain("has no commits yet");
+  });
 });

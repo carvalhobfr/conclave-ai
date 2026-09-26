@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.16.2] — 2026-09-26
+
+- Robustness pass across every surface: `compare` works in scripts and CI with an inferred objective; prompts never pick an option silently without a terminal and re-ask after a typo; switching provider with `conclave config set provider` also switches mode and resets the old endpoint and role models; `config unset` no longer claims to remove missing keys; `conclave open` moves to the next free port; `update --check` shows the installed version; the cockpit starts from the same inferred objective as the CLI; the agent skill and GitHub Action no longer require an objective; MCP reports the real version; localized comparison line.
+
 ## [0.16.1] — 2026-09-26
 
 - Friendlier first run: relative bases such as `--base HEAD~3` work; a repository without commits, a missing base, an unknown command (with a did-you-mean suggestion), and Ask without a provider each explain the next step; "Nothing to review" suggests what to try; and `.conclave/` ignores itself so it never shows up as untracked.

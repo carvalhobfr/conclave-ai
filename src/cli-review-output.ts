@@ -50,6 +50,22 @@ const COPY = {
   },
 } as const;
 
+function comparison(report: ValidationReport, language: InterfaceLanguage): string {
+  const source = report.changeSet.source;
+  const text = {
+    en: { workspace: "Current workspace vs", branch: "vs", commit: "Commit", staged: "Staged changes vs HEAD", working: "Working tree vs HEAD" },
+    "pt-BR": { workspace: "Workspace atual vs", branch: "vs", commit: "Commit", staged: "Mudanças staged vs HEAD", working: "Working tree vs HEAD" },
+    "es-ES": { workspace: "Workspace actual vs", branch: "vs", commit: "Commit", staged: "Cambios staged vs HEAD", working: "Working tree vs HEAD" },
+  }[language];
+  switch (source.kind) {
+    case "workspace": return `${text.workspace} ${source.base}`;
+    case "branch": return `${source.head ?? "HEAD"} ${text.branch} ${source.base}`;
+    case "commit": return `${text.commit} ${source.commit.slice(0, 12)}`;
+    case "staged": return text.staged;
+    case "working": return text.working;
+  }
+}
+
 function paint(color: boolean, code: string, text: string): string {
   return color ? `${code}${text}${ANSI.reset}` : text;
 }
@@ -84,7 +100,7 @@ export function renderCompactReview(
     .filter((finding) => finding.severity !== "info")
     .sort((left, right) => severityRank[left.severity] - severityRank[right.severity]);
   const lines: string[] = [""];
-  lines.push(paint(color, ANSI.dim, `${summary.comparison} · ${copy.changed(report.metrics.filesChanged, report.metrics.impactedFiles)}`));
+  lines.push(paint(color, ANSI.dim, `${comparison(report, language)} · ${copy.changed(report.metrics.filesChanged, report.metrics.impactedFiles)}`));
   const badge = paint(color, `${ANSI.bold}${verdictColor(report.verdict)}`, report.verdict.toUpperCase());
   lines.push(`${badge}  ${findings.length === 0 ? copy.noRisks : copy.risks(findings.length)}`);
   if (findings.length > 0) {

@@ -31,9 +31,6 @@ function parseArguments(argv) {
   if (!["workspace", "working", "staged", "branch", "commit"].includes(parsed.source)) {
     throw new Error("--source must be workspace, working, staged, branch, or commit");
   }
-  if (parsed.source !== "workspace" && (typeof parsed.objective !== "string" || parsed.objective.trim() === "")) {
-    throw new Error("--objective is required for explicit working, staged, branch, and commit validation");
-  }
   if ((parsed.source === "branch" || parsed.source === "commit") && parsed.ref === undefined) {
     throw new Error(`--ref is required for ${parsed.source} validation`);
   }
@@ -77,8 +74,8 @@ async function commandOnPath(name) {
       try {
         await access(candidate, constants.X_OK);
         return candidate;
-      } catch {
-        // Try the next PATH entry.
+      } catch { // conclave-ignore: discarded-error
+        // Not executable here; try the next PATH entry.
       }
     }
   }
@@ -101,7 +98,7 @@ async function resolveCommand(repository) {
   // A global `npm install -g conclave-ai` avoids a network fetch on every review.
   const installed = await commandOnPath("conclave");
   if (installed !== undefined) return { command: installed, prefix: [] };
-  return { command: "npx", prefix: ["--yes", "--package=conclave-ai@0.16.1", "conclave"] };
+  return { command: "npx", prefix: ["--yes", "--package=conclave-ai@0.16.2", "conclave"] };
 }
 
 function commandArguments(parsed) {
@@ -110,9 +107,14 @@ function commandArguments(parsed) {
   for (const receipt of parsed.receipts) protocol.push("--receipt", resolve(receipt));
   if (parsed.series !== undefined) protocol.push("--series", parsed.series);
   if (parsed.newSeries) protocol.push("--new-series");
-  if (parsed.source === "workspace") {
+  const hasObjective = typeof parsed.objective === "string" && parsed.objective.trim() !== "";
+  // `check` derives a transparent objective from the latest commit; `review` needs an explicit one.
+  if (parsed.source === "workspace" || !hasObjective) {
     const args = ["check", resolve(parsed.repository)];
-    if (parsed.ref !== undefined) args.push("--base", parsed.ref);
+    if (parsed.source === "working" || parsed.source === "staged") args.push(`--${parsed.source}`);
+    else if (parsed.source === "commit") args.push("--commit", parsed.ref);
+    else if (parsed.ref !== undefined) args.push("--base", parsed.ref);
+    if (parsed.head !== undefined) args.push("--head", parsed.head);
     if (typeof parsed.objective === "string" && parsed.objective.trim() !== "") args.push("--objective", parsed.objective.trim());
     if (parsed.contract !== undefined) args.push("--contract", resolve(parsed.contract));
     args.push(...protocol);
@@ -221,6 +223,8 @@ async function main() {
   const repository = resolve(parsed.repository);
   const resolved = await resolveCommand(repository);
   const result = await execute(resolved.command, [...resolved.prefix, ...commandArguments(parsed)], repository);
+  // A CLI failure prints only to stderr; report it as is instead of a JSON parse error.
+  if (result.stdout.trim() === "" && result.stderr.trim() !== "") throw new Error(result.stderr.trim());
   let report;
   try {
     const parsedOutput = JSON.parse(result.stdout.trim());

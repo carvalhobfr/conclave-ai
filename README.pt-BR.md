@@ -82,7 +82,7 @@ conclave check .
 Exemplo de saída para uma branch que adicionou um parâmetro de senha ao `login()`:
 
 ```text
-Current workspace compared with master · 1 file changed · 2 affected
+Current workspace vs master · 1 file changed · 2 affected
 WARN  3 risks
 
   ⚠ src/auth.ts:2  Changed code has an empty catch block

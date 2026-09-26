@@ -25,6 +25,17 @@ type WorkspaceTab = "verdict" | "findings" | "claims" | "impact" | "diff" | "han
 
 function statusLabel(status: string): string { return status.replaceAll("-", " ").toUpperCase(); }
 
+/** True when the contract JSON actually constrains the review, not just an empty template. */
+function contractHasContent(text: string): boolean {
+  if (text.trim() === "") return false;
+  try {
+    const value = JSON.parse(text) as { criteria?: unknown[]; claims?: unknown[]; allowedPathPrefixes?: unknown[] };
+    return (value.criteria?.length ?? 0) + (value.claims?.length ?? 0) + (value.allowedPathPrefixes?.length ?? 0) > 0;
+  } catch {
+    return true;
+  }
+}
+
 function Empty({ title, detail }: { readonly title: string; readonly detail: string }) {
   return <section className="empty"><h2>{title}</h2><p>{detail}</p></section>;
 }
@@ -420,13 +431,14 @@ export function App() {
       setProject(opened);
       setSourceKind("workspace");
       setSourceRef(opened.git?.defaultBase ?? "master");
+      if (opened.git?.suggestedObjective !== undefined) setInput(opened.git.suggestedObjective);
       return api.history(opened.id).then(setHistory);
     }).catch((error: unknown) => setNotice(error instanceof Error ? error.message : "Could not open repository."))
       .finally(() => setBusy(false));
   }, []);
   const modeCopy = useMemo(() => intent === "validate" ? "Review this change" : intent === "ask" ? "Evidence-backed answer" : "Structured causal analysis", [intent]);
   const setActiveIntent = (next: ProductIntent) => { setIntent(next); setInput(next === "validate" ? DEFAULT_VALIDATE : next === "ask" ? DEFAULT_ASK : DEFAULT_INVESTIGATE); setTab("verdict"); };
-  const openLocal = async () => { if (localPath.trim() === "") return; setBusy(true); try { const opened = await api.open(localPath); setProject(opened); setSourceKind("workspace"); setSourceRef(opened.git?.defaultBase ?? "master"); setHistory(await api.history(opened.id)); setNotice("Repository ready. Branch commits and every local change can be reviewed together."); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not open local folder."); } finally { setBusy(false); } };
+  const openLocal = async () => { if (localPath.trim() === "") return; setBusy(true); try { const opened = await api.open(localPath); setProject(opened); setSourceKind("workspace"); setSourceRef(opened.git?.defaultBase ?? "master"); if (opened.git?.suggestedObjective !== undefined) setInput(opened.git.suggestedObjective); setHistory(await api.history(opened.id)); setNotice("Repository ready. Branch commits and every local change can be reviewed together."); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not open local folder."); } finally { setBusy(false); } };
   const submit = async () => {
     if (project === undefined) return;
     setBusy(true);
@@ -486,7 +498,7 @@ export function App() {
         <div className="composer-title"><h1>{modeCopy}</h1><p>{intent === "validate" ? "Compare the real Git change, follow affected code, and prepare it for human review." : "Explore the repository with bounded evidence. These optional modes may use your configured provider."}</p></div>
         <label className="sr-only" htmlFor="query">{intent === "validate" ? "Change objective" : "Repository question"}</label>
         <textarea id="query" value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit(); } }} rows={3} />
-        {intent === "validate" && <details className="advanced-options"><summary>Options <small>{sourceKind === "workspace" ? `Current workspace vs ${sourceRef}` : sourceKind === "branch" ? `Committed branch vs ${sourceRef}` : sourceKind === "working" ? "Working tree vs HEAD" : sourceKind === "staged" ? "Staged changes" : `Commit ${sourceRef}`}{previousReviewId === "" ? "" : " · continuing a series"}{contractText.trim() === "" ? "" : " · with criteria"}</small></summary><div className="validation-controls"><label htmlFor="change-source">Compare</label><select id="change-source" value={sourceKind} onChange={(event) => { const next = event.target.value as ValidationRequestView["source"]["kind"]; setSourceKind(next); if (next === "branch" || next === "workspace") setSourceRef("master"); else if (next === "commit") setSourceRef("HEAD"); }}><option value="workspace">Current workspace against base</option><option value="branch">Committed branch against base</option><option value="working">Working tree against HEAD</option><option value="staged">Staged changes</option><option value="commit">Checked-out commit</option></select>{(sourceKind === "branch" || sourceKind === "workspace" || sourceKind === "commit") && <><label htmlFor="source-ref">{sourceKind === "commit" ? "Commit" : "Base branch"}</label><input id="source-ref" value={sourceRef} onChange={(event) => setSourceRef(event.target.value)} /></>}</div>{project !== undefined && project.source === "local" && <AcceptanceEditor key={project.id} projectId={project.id} objective={input} onLoad={setInput} onChange={setContractText} />}
+        {intent === "validate" && <details className="advanced-options"><summary>Options <small>{sourceKind === "workspace" ? `Current workspace vs ${sourceRef}` : sourceKind === "branch" ? `Committed branch vs ${sourceRef}` : sourceKind === "working" ? "Working tree vs HEAD" : sourceKind === "staged" ? "Staged changes" : `Commit ${sourceRef}`}{previousReviewId === "" ? "" : " · continuing a series"}{contractHasContent(contractText) ? " · with criteria" : ""}</small></summary><div className="validation-controls"><label htmlFor="change-source">Compare</label><select id="change-source" value={sourceKind} onChange={(event) => { const next = event.target.value as ValidationRequestView["source"]["kind"]; setSourceKind(next); if (next === "branch" || next === "workspace") setSourceRef("master"); else if (next === "commit") setSourceRef("HEAD"); }}><option value="workspace">Current workspace against base</option><option value="branch">Committed branch against base</option><option value="working">Working tree against HEAD</option><option value="staged">Staged changes</option><option value="commit">Checked-out commit</option></select>{(sourceKind === "branch" || sourceKind === "workspace" || sourceKind === "commit") && <><label htmlFor="source-ref">{sourceKind === "commit" ? "Commit" : "Base branch"}</label><input id="source-ref" value={sourceRef} onChange={(event) => setSourceRef(event.target.value)} /></>}</div>{project !== undefined && project.source === "local" && <AcceptanceEditor key={project.id} projectId={project.id} objective={input} onLoad={setInput} onChange={setContractText} />}
         <label>Compare with saved review<select aria-label="Previous review" value={previousReviewId} onChange={(event) => setPreviousReviewId(event.target.value)}><option value="">Start a new review series</option>{history.filter((item) => item.report !== undefined).map((item) => <option key={item.id} value={item.report?.lineage.reviewId}>{item.createdAt} — {item.objective}</option>)}</select></label>
         <label>Attach execution receipts<input type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file === undefined) { setReceiptEnvelope(undefined); return; } if (file.size > 1_000_000) { setReceiptEnvelope(undefined); setNotice("Receipt file is too large"); return; } void file.text().then((text) => { setReceiptEnvelope(JSON.parse(text)); setNotice("Execution receipts attached to the next review."); }).catch(() => { setReceiptEnvelope(undefined); setNotice("Invalid receipt JSON"); }); }} /></label>
         <details className="contract-editor"><summary>Optional contract: scope and completion claims</summary><p>Paste the same JSON accepted by the CLI. The objective above takes precedence.</p><textarea aria-label="Optional validation contract" value={contractText} onChange={(event) => setContractText(event.target.value)} rows={7} placeholder={'{"allowedPathPrefixes":[],"claims":[]}'}/></details></details>}

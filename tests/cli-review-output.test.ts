@@ -12,7 +12,7 @@ function report(findings: readonly ValidationFinding[], files = 1): ValidationRe
   return {
     verdict: findings.some((item) => item.severity === "blocking") ? "block" : findings.length > 0 ? "warn" : "pass",
     findings,
-    changeSet: { files: Array.from({ length: files }, (_, index) => ({ path: `f${String(index)}`, status: "modified", hunks: [] })) },
+    changeSet: { source: { kind: "workspace", base: "main" }, files: Array.from({ length: files }, (_, index) => ({ path: `f${String(index)}`, status: "modified", hunks: [] })) },
     metrics: { filesChanged: files, impactedFiles: 2 },
   } as unknown as ValidationReport;
 }
@@ -25,6 +25,7 @@ describe("compact check output", () => {
       finding("warning", "w1", 1), finding("warning", "w2", 2), finding("blocking", "b1", 9), finding("warning", "w3", 3), finding("info", "note", 4),
     ]), summary, "en", false);
     const lines = text.split("\n");
+    expect(lines[1]).toBe("Current workspace vs main · 1 file changed · 2 affected");
     expect(lines[2]).toBe("BLOCK  4 risks");
     expect(text.indexOf("b1")).toBeLessThan(text.indexOf("w1"));
     expect(text).toContain("src/a.ts:9");

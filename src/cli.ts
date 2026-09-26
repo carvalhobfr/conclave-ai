@@ -648,7 +648,17 @@ async function updateConclave(args: readonly string[]): Promise<void> {
     if (result.code !== 0) {
       process.stderr.write(result.stderr);
       process.exitCode = result.code;
-    } else console.log(result.stdout.trim());
+    } else {
+      const latestVersion = result.stdout.trim();
+      console.log(latestVersion);
+      // stdout stays the bare version for scripts; people also get the comparison.
+      if (process.stdout.isTTY) {
+        const installed = (JSON.parse(await readFile(resolve(dirname(fileURLToPath(import.meta.url)), "../package.json"), "utf8")) as { version?: string }).version ?? "0.0.0";
+        console.error(compareVersions(installed, latestVersion) >= 0
+          ? `Installed ${installed} · up to date`
+          : `Installed ${installed} · ${latestVersion} is available: conclave update --global (or --local)`);
+      }
+    }
     return;
   }
   const latest = await captureExternalCommand("npm", ["view", "conclave-ai", "version"]);
@@ -744,11 +754,17 @@ async function compareBranches(args: readonly string[]): Promise<void> {
     head = await promptBranch(root, prompts[cliLanguage].head, base);
   }
   if (base === head) throw new Error("Base and target must be different branches");
+  // Like `check`, fall back to the target's latest commit so compare works in scripts and CI.
+  const headSubject = (await captureExternalCommand("git", ["log", "-1", "--pretty=%s", head], root)).stdout.trim();
+  const inferred = headSubject === ""
+    ? "Review the change for regressions, unexpected impact, and merge risk."
+    : `Review “${headSubject}” for regressions, unexpected impact, and merge risk.`;
   const objective = parsed.objective?.trim() === "" || parsed.objective === undefined
-    ? await promptLine(prompts[cliLanguage].objective)
+    ? await promptLine(prompts[cliLanguage].objective, inferred)
     : parsed.objective;
-  const forwarded = [root, "--base", base, "--head", head, "--objective", objective];
+  const forwarded = [root, "--base", base, "--head", head, "--objective", objective, ...validationProtocolArguments(parsed)];
   if (parsed.json) forwarded.push("--json");
+  if (parsed.verbose) forwarded.push("--verbose");
   await pullRequestSummary(forwarded);
 }
 
@@ -1275,6 +1291,19 @@ async function applyInterfaceLanguage(language: InterfaceLanguage, json: boolean
   console.log(copy.jsonStable);
 }
 
+/** Switching provider must not inherit an endpoint or per-role models from the previous one. */
+function staleProviderSettings(): Record<string, undefined> {
+  return Object.fromEntries([
+    "CONCLAVE_BASE_URL",
+    "CONCLAVE_FALLBACK_MODEL",
+    ...["investigator", "skeptic", "architect", "verifier", "judge"].flatMap((role) => [
+      `CONCLAVE_${role.toUpperCase()}_PROVIDER`,
+      `CONCLAVE_${role.toUpperCase()}_MODEL`,
+      `CONCLAVE_${role.toUpperCase()}_FALLBACK_MODEL`,
+    ]),
+  ].map((key) => [key, undefined]));
+}
+
 function configTarget(project: boolean): string {
   return project ? resolve(".env") : activeEnvironmentPath(resolve(".env"), userPreferenceEnvironment);
 }
@@ -1329,6 +1358,11 @@ async function showConfig(args: readonly string[]): Promise<void> {
     }
     const path = configTarget(project);
     if (action === "unset") {
+      if (!readConclaveEnvironmentFile(path).has(key)) {
+        if (json) { print({ key, removed: false, configFile: path }, true); return; }
+        console.log(`${key} is not set in ${path}${process.env[key] === undefined ? "" : ` (the current value comes from ${settingSource(key) || "the environment"})`}`);
+        return;
+      }
       await updateConclaveEnvironment(path, { [key]: undefined });
       if (json) { print({ key, removed: true, configFile: path }, true); return; }
       console.log(`✓ Removed ${key} from ${path}`);
@@ -1336,15 +1370,19 @@ async function showConfig(args: readonly string[]): Promise<void> {
     }
     const value = validateConfigValue(key, await readSettingValue(key, values.length === 0 ? undefined : values.join(" ")));
     if (value === "") throw new Error(`${key} cannot be empty; use \`conclave config unset ${name}\` to remove it`);
-    // A provider only takes effect with a matching mode; infer it so one command is enough.
-    const impliedMode = key === "CONCLAVE_PROVIDER" && process.env["CONCLAVE_MODE"] === undefined
+    // A provider only takes effect with its matching mode (local models need local mode, hosted
+    // ones need api mode), so switching provider switches mode too.
+    const previousProvider = process.env["CONCLAVE_PROVIDER"];
+    const switchingProvider = key === "CONCLAVE_PROVIDER" && previousProvider !== undefined && previousProvider !== value;
+    const impliedMode = key === "CONCLAVE_PROVIDER"
       ? { CONCLAVE_MODE: ["ollama", "lm-studio"].includes(value) ? "local" : "api" }
       : {};
-    await updateConclaveEnvironment(path, { ...impliedMode, [key]: value });
+    await updateConclaveEnvironment(path, { ...(switchingProvider ? staleProviderSettings() : {}), ...impliedMode, [key]: value });
     if (json) { print({ key, saved: true, value: maskValue(key, value), configFile: path }, true); return; }
     console.log(`✓ ${key} = ${maskValue(key, value)}`);
     console.log(`  saved in ${path}`);
-    if (key === "CONCLAVE_API_KEY" || key === "CONCLAVE_PROVIDER" || key === "CONCLAVE_MODEL") console.log("  Test it with `conclave provider-check`.");
+    if (switchingProvider) console.log(`  Endpoint and per-role models were reset. Pick a model for ${value}: conclave config set model <id>${["ollama", "lm-studio"].includes(value) ? "" : " (and conclave config set api-key if this provider uses another key)"}`);
+    else if (key === "CONCLAVE_API_KEY" || key === "CONCLAVE_PROVIDER" || key === "CONCLAVE_MODEL") console.log("  Test it with `conclave provider-check`.");
     return;
   }
   if (action !== undefined) throw new Error(`Unknown config action: ${action}\n\n${CONFIG_USAGE}`);
@@ -1490,7 +1528,9 @@ function parseInitArguments(args: readonly string[]): InitArguments {
 
 async function promptLine(label: string, fallback?: string): Promise<string> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error("init needs --provider and --api-key-stdin/--no-key when stdin is not a TTY");
+    // Scripts and CI cannot answer questions; the caller's flags are the non-interactive path.
+    if (fallback !== undefined) return fallback;
+    throw new Error(`"${label}" needs an interactive terminal. Pass the value as an option instead; see \`conclave help <command>\`.`);
   }
   const readline = createInterface({ input: process.stdin, output: process.stdout });
   try {
@@ -1507,17 +1547,28 @@ async function promptChoice<T extends { readonly id: string; readonly label: str
   choices: readonly T[],
   color = false,
 ): Promise<T> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    // Never pick an option on the user's behalf when nobody can see the list.
+    throw new Error(`"${label.split("\n")[0] ?? label}" needs an interactive terminal. Pass the choice as an option instead; see \`conclave help <command>\`.`);
+  }
   console.log(label);
   for (const [index, choice] of choices.entries()) {
     console.log(renderSetupChoice(index + 1, choice, color));
   }
-  const answer = await promptLine(interfaceCopy(cliLanguage).choose, "1");
-  const numeric = Number(answer);
-  const selected = Number.isInteger(numeric) && numeric >= 1 && numeric <= choices.length
-    ? choices[numeric - 1]
-    : choices.find((choice) => choice.id === answer);
-  if (selected === undefined) throw new Error(`Unknown selection: ${answer}`);
-  return selected;
+  // A typo re-asks instead of ending the session; Ctrl+C still exits.
+  for (;;) {
+    const answer = await promptLine(interfaceCopy(cliLanguage).choose, "1");
+    const numeric = Number(answer);
+    const selected = Number.isInteger(numeric) && numeric >= 1 && numeric <= choices.length
+      ? choices[numeric - 1]
+      : choices.find((choice) => choice.id === answer);
+    if (selected !== undefined) return selected;
+    console.log({
+      en: `"${answer}" is not an option. Type a number from 1 to ${String(choices.length)}.`,
+      "pt-BR": `"${answer}" não é uma opção. Digite um número de 1 a ${String(choices.length)}.`,
+      "es-ES": `"${answer}" no es una opción. Escribe un número del 1 al ${String(choices.length)}.`,
+    }[cliLanguage]);
+  }
 }
 
 async function promptSecret(label: string): Promise<string> {
@@ -1577,6 +1628,9 @@ async function readApiKeyFromStandardInput(): Promise<string> {
 async function initializeConclave(args: readonly string[]): Promise<void> {
   const parsed = parseInitArguments(args);
   const interactive = process.stdin.isTTY && process.stdout.isTTY;
+  if (!interactive && (parsed.provider === undefined || (!parsed.apiKeyStdin && !parsed.noKey))) {
+    throw new Error("init needs --provider and --api-key-stdin/--no-key when stdin is not a TTY");
+  }
   const color = terminalColorEnabled();
   const providerChoices = (["opencode-go", "openai", "openrouter", "anthropic"] as const).map((id) => {
     const guide = providerSetupGuide(id, cliLanguage);
@@ -1620,16 +1674,7 @@ async function initializeConclave(args: readonly string[]): Promise<void> {
     ...(reasoningStyleId === undefined ? {} : { reasoningStyleId }),
     ...(apiKey === undefined ? {} : { apiKey }),
   });
-  // Switching provider must not inherit an endpoint or per-role models from the previous one.
-  const staleProviderKeys = Object.fromEntries([
-    "CONCLAVE_BASE_URL",
-    "CONCLAVE_FALLBACK_MODEL",
-    ...["investigator", "skeptic", "architect", "verifier", "judge"].flatMap((role) => [
-      `CONCLAVE_${role.toUpperCase()}_PROVIDER`,
-      `CONCLAVE_${role.toUpperCase()}_MODEL`,
-    ]),
-  ].map((key) => [key, undefined]));
-  const write = await updateConclaveEnvironment(parsed.envFile, { ...staleProviderKeys, ...setup.environment });
+  const write = await updateConclaveEnvironment(parsed.envFile, { ...staleProviderSettings(), ...setup.environment });
   const report = {
     configFile: write.path,
     updated: write.updated,
@@ -1765,7 +1810,13 @@ async function doctorRepository(args: readonly string[]): Promise<void> {
     console.log(`${mark} ${check.id}: ${check.detail} (${check.status})`);
   }
   console.log(report.ready ? "\nReady for `conclave check .`." : "\nFix the errors above before reviewing.");
-  if (checks.some((check) => check.status === "optional")) console.log("Run `conclave setup .` to add agent and GitHub integrations.");
+  const missing = checks.filter((check) => check.status === "optional").map((check) => check.id);
+  if (missing.length > 0) {
+    const agents = missing.includes("codex-skill") && missing.includes("claude-skill") ? "both"
+      : missing.includes("codex-skill") ? "codex" : missing.includes("claude-skill") ? "claude" : "none";
+    const flags = [agents === "none" ? "--agents none" : `--agents ${agents}`, missing.includes("github-actions") ? "--github-actions" : ""].filter(Boolean).join(" ");
+    console.log(`Optional: add ${missing.join(", ")} with \`conclave setup . ${flags}\`.`);
+  }
 }
 
 function launchBrowser(url: string): void {
@@ -1778,12 +1829,14 @@ function launchBrowser(url: string): void {
 async function openCockpit(args: readonly string[]): Promise<void> {
   let project = ".";
   let port = 4317;
+  let portRequested = false;
   let browser = true;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--no-browser") { browser = false; continue; }
     if (argument === "--port") {
       port = Number(args[index + 1]);
+      portRequested = true;
       if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("--port must be between 1 and 65535");
       index += 1;
       continue;
@@ -1796,10 +1849,23 @@ async function openCockpit(args: readonly string[]): Promise<void> {
   const staticRoot = resolve(dirname(fileURLToPath(import.meta.url)), "web-client");
   const product = new ConclaveProductService({ allowedRoot: inspection.root });
   const server = createConclaveWebServer({ product, staticRoot });
-  await new Promise<void>((resolvePromise, reject) => {
-    server.once("error", reject);
-    server.listen(port, "127.0.0.1", resolvePromise);
-  });
+  // Another cockpit (or app) on the default port should not block opening this one.
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await new Promise<void>((resolvePromise, reject) => {
+        server.once("error", reject);
+        server.listen(port, "127.0.0.1", () => { server.removeListener("error", reject); resolvePromise(); });
+      });
+      break;
+    } catch (error) {
+      const inUse = typeof error === "object" && error !== null && "code" in error && error.code === "EADDRINUSE";
+      if (!inUse) throw error;
+      if (portRequested || attempt >= 10 || port >= 65_535) {
+        throw new Error(`Port ${String(port)} is already in use. Stop the other process or choose another port with --port <number>.`, { cause: error });
+      }
+      port += 1;
+    }
+  }
   const url = `http://127.0.0.1:${String(port)}/?repository=${encodeURIComponent(inspection.root)}`;
   console.log(`Conclave cockpit: ${url}`);
   console.log(interfaceCopy(cliLanguage).readOnlyServer);

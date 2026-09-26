@@ -24,6 +24,8 @@ export interface ProjectView {
     readonly staged: number;
     readonly unstaged: number;
     readonly untracked: number;
+    /** Same fallback objective `conclave check` uses, derived from the latest commit. */
+    readonly suggestedObjective?: string;
   };
 }
 

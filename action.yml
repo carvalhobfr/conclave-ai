@@ -11,8 +11,8 @@ inputs:
     description: Reviewed head commit or ref
     default: HEAD
   objective:
-    description: Expected delivery outcome
-    required: true
+    description: Expected delivery outcome (defaults to a review of the head commit's subject)
+    default: ''
   contract:
     description: Optional contract JSON path relative to repository
     default: ''

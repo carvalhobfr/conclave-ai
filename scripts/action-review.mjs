@@ -13,7 +13,11 @@ const commit = (ref) => {
   if (!/^[a-f0-9]{40,64}$/.test(sha)) throw new Error("Git ref did not resolve to a commit");
   return sha;
 };
-const args = [resolve(action, "dist/cli.js"), "review", repository, "--base", commit(process.env.CONCLAVE_BASE), "--head", commit(process.env.CONCLAVE_HEAD || "HEAD"), "--objective", process.env.CONCLAVE_OBJECTIVE, "--json"];
+const head = commit(process.env.CONCLAVE_HEAD || "HEAD");
+// GitHub does not enforce `required` inputs on composite actions; mirror `conclave check` instead of crashing.
+const subject = () => execFileSync("git", ["log", "-1", "--pretty=%s", head], { cwd: repository, encoding: "utf8" }).trim();
+const objective = process.env.CONCLAVE_OBJECTIVE?.trim() || `Review “${subject() || "the pull request"}” for regressions, unexpected impact, and merge risk.`;
+const args = [resolve(action, "dist/cli.js"), "review", repository, "--base", commit(process.env.CONCLAVE_BASE), "--head", head, "--objective", objective, "--json"];
 for (const [key, flag] of [["CONCLAVE_CONTRACT", "--contract"], ["CONCLAVE_RECEIPTS", "--receipt"], ["CONCLAVE_PREVIOUS", "--previous-report"]]) if (process.env[key]) args.push(flag, resolve(repository, process.env[key]));
 let code = 0; let stdout;
 try { stdout = execFileSync(process.execPath, args, { cwd: repository, encoding: "utf8", maxBuffer: 8_000_000, timeout: 120_000 }); }

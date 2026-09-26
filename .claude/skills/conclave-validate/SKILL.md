@@ -16,7 +16,7 @@ The runner finds Conclave in this order: `CONCLAVE_CLI_PATH`; a `dist/cli.js` wh
 ## Workflow
 
 1. Resolve the repository root and requested comparison. Default to `workspace` when the user did not name a branch, commit, staged change, or base. This includes the current branch and all local files without changing checkout.
-2. Use a concrete objective when supplied. Otherwise `conclave check` derives a transparent review objective from the latest commit; do not claim that inference came from the user.
+2. Use a concrete objective when supplied. Otherwise the runner uses `conclave check`, which derives a transparent review objective from the latest commit for any source; do not claim that inference came from the user.
 3. Use a supplied validation contract when available. Do not invent completion claims and present them as user claims. When continuing a correction loop, pass the last raw report through `--previous-report`; this freezes the objective and contract comparison instead of trusting a rewritten prompt.
 4. Run the bundled runner from this skill directory:
 

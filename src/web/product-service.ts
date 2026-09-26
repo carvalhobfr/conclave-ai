@@ -34,7 +34,7 @@ import { SuperValidator } from "../validation/super-validator.js";
 import { createReviewHandoff } from "../domain/review-handoff.js";
 import { createPullRequestSummary } from "../domain/pr-summary.js";
 import { listReviewHistory, saveReviewHistory } from "../storage/review-history.js";
-import { inspectRepository } from "../workflow/repository-inspector.js";
+import { inferredReviewObjective, inspectRepository } from "../workflow/repository-inspector.js";
 import { createDemoReasoningEngine } from "./demo-runtime.js";
 import type {
   ClaimView,
@@ -625,6 +625,7 @@ export class ConclaveProductService {
           staged: inspection.status.staged,
           unstaged: inspection.status.unstaged,
           untracked: inspection.status.untracked,
+          suggestedObjective: inferredReviewObjective(inspection),
         },
       })).catch(() => ({}))),
     };
