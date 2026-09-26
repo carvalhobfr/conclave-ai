@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.15.2] — 2026-09-26
+
+- Skill de agente mais segura: o runner só executa um dist/cli.js que pertence ao conclave-ai, usa um conclave global no PATH antes do npx, permite 300 s por padrão (CONCLAVE_TIMEOUT_MS) e a skill começa por veredito, achado principal, próxima ação e limites. A referência de schema agora cobre v2 a v5.
+
 ## [0.15.1] — 2026-09-26
 
 - Ações do cockpit em até três cliques: trocar de Conclave aplica na hora quando a chave salva é do mesmo provider, as opções de review ficam num único painel Opções com resumo ao vivo, o handoff do agente é copiado direto do resumo, itens do histórico continuam uma série de review, erros de provider levam a Configurações e ⌘/Ctrl+Enter executa.

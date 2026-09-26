@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 
 const MAX_OUTPUT_BYTES = 10_000_000;
-const TIMEOUT_MS = 120_000;
+// The first run indexes the repository; large monorepos need more than two minutes.
+const TIMEOUT_MS = Number(process.env.CONCLAVE_TIMEOUT_MS ?? 300_000);
 const VERDICT_EXIT = { pass: 0, warn: 0, block: 1, inconclusive: 2 };
 
 function parseArguments(argv) {
@@ -54,6 +55,36 @@ async function executable(path) {
   }
 }
 
+// A `dist/cli.js` is only trusted when its package is Conclave. Otherwise reviewing any project
+// that ships its own CLI would execute that project's code, which this skill promises never to do.
+async function conclaveEntrypoint(packageRoot) {
+  const entrypoint = resolve(packageRoot, "dist/cli.js");
+  if (!(await executable(entrypoint))) return undefined;
+  try {
+    const manifest = JSON.parse(await readFile(resolve(packageRoot, "package.json"), "utf8"));
+    return manifest?.name === "conclave-ai" ? entrypoint : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function commandOnPath(name) {
+  const extensions = process.platform === "win32" ? (process.env.PATHEXT ?? ".CMD;.EXE").split(";") : [""];
+  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
+    if (directory === "") continue;
+    for (const extension of extensions) {
+      const candidate = join(directory, `${name}${extension}`);
+      try {
+        await access(candidate, constants.X_OK);
+        return candidate;
+      } catch {
+        // Try the next PATH entry.
+      }
+    }
+  }
+  return undefined;
+}
+
 async function resolveCommand(repository) {
   const explicitEntrypoint = process.env.CONCLAVE_CLI_PATH;
   if (explicitEntrypoint !== undefined) {
@@ -62,18 +93,15 @@ async function resolveCommand(repository) {
     return { command: process.execPath, prefix: [path] };
   }
   const skillRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-  const entrypoints = [
-    resolve(repository, "dist/cli.js"),
-    resolve(skillRoot, "dist/cli.js"),
-    resolve(repository, "node_modules/conclave-ai/dist/cli.js"),
-  ];
-  for (const path of entrypoints) {
-    if (await executable(path)) return { command: process.execPath, prefix: [path] };
+  for (const packageRoot of [repository, skillRoot, resolve(repository, "node_modules/conclave-ai")]) {
+    const entrypoint = await conclaveEntrypoint(packageRoot);
+    if (entrypoint !== undefined) return { command: process.execPath, prefix: [entrypoint] };
   }
-  const localBinary = resolve(repository, "node_modules/.bin/conclave");
-  if (await executable(localBinary)) return { command: localBinary, prefix: [] };
   if (process.env.CONCLAVE_BIN !== undefined) return { command: process.env.CONCLAVE_BIN, prefix: [] };
-  return { command: "npx", prefix: ["--yes", "--package=conclave-ai@0.15.1", "conclave"] };
+  // A global `npm install -g conclave-ai` avoids a network fetch on every review.
+  const installed = await commandOnPath("conclave");
+  if (installed !== undefined) return { command: installed, prefix: [] };
+  return { command: "npx", prefix: ["--yes", "--package=conclave-ai@0.15.2", "conclave"] };
 }
 
 function commandArguments(parsed) {
@@ -132,7 +160,7 @@ function execute(command, args, cwd) {
       child.kill("SIGKILL");
       if (!settled) {
         settled = true;
-        reject(new Error("Conclave validation timed out after 120 seconds"));
+        reject(new Error(`Conclave validation timed out after ${String(Math.round(TIMEOUT_MS / 1000))} seconds; set CONCLAVE_TIMEOUT_MS to allow more time`));
       }
     }, TIMEOUT_MS);
     child.once("error", (error) => {

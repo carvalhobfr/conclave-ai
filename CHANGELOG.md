@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.15.2] — 2026-09-26
+
+- Agent skill hardening: the runner only executes a dist/cli.js that belongs to conclave-ai, uses a global conclave on PATH before npx, allows 300 s by default (CONCLAVE_TIMEOUT_MS), and the skill leads with verdict, main finding, next action, and limits. The schema reference now covers v2 through v5.
+
 ## [0.15.1] — 2026-09-26
 
 - Cockpit actions within three clicks: switching Conclave applies it immediately when the saved key matches its provider, review options fold into one Options panel with a live summary, the agent handoff copies from the summary, history entries continue a review series, provider errors link to Settings, and ⌘/Ctrl+Enter runs.

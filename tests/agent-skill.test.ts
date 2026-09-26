@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { access, chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { delimiter, join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -78,5 +79,43 @@ describe("v3 portable protocol", () => {
     const result = await runRunner(objective, 3);
     expect(result.code, result.stderr).toBe(objective === "BLOCK" ? 1 : objective === "INCONCLUSIVE" ? 2 : 0);
     expect(JSON.parse(result.stdout)).toEqual(expect.objectContaining({ schemaVersion: 3 }));
+  });
+});
+
+describe("runner command resolution", () => {
+  it("never executes another project's dist/cli.js and prefers a global conclave on PATH", async () => {
+    const root = await mkdtemp(join(tmpdir(), "conclave-runner-"));
+    try {
+      // The runner copy sits outside any conclave-ai package so only PATH can supply the CLI.
+      const skill = join(root, "skill");
+      await cp(resolve("skills/conclave-validate"), skill, { recursive: true });
+      const repository = join(root, "other-project");
+      await mkdir(join(repository, "dist"), { recursive: true });
+      await writeFile(join(repository, "package.json"), JSON.stringify({ name: "other-project" }));
+      const marker = join(root, "executed");
+      await writeFile(join(repository, "dist/cli.js"), `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "x");`);
+      const bin = join(root, "bin");
+      await mkdir(bin);
+      const shim = join(bin, "conclave");
+      await writeFile(shim, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(resolve("tests/fixtures/agent-skill/fake-conclave.mjs"))} "$@"\n`);
+      await chmod(shim, 0o755);
+      const environment: NodeJS.ProcessEnv = { ...process.env, PATH: `${bin}${delimiter}${process.env["PATH"] ?? ""}`, CONCLAVE_FIXTURE_SCHEMA: "5" };
+      delete environment["CONCLAVE_CLI_PATH"];
+      delete environment["CONCLAVE_BIN"];
+      const result = await new Promise<{ code: number; stdout: string; stderr: string }>((resolvePromise, reject) => {
+        const child = spawn(process.execPath, [join(skill, "scripts/run-validation.mjs"), "--repository", repository, "--source", "working", "--objective", "valid small change"], { env: environment, stdio: ["ignore", "pipe", "pipe"] });
+        let stdout = "";
+        let stderr = "";
+        child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
+        child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+        child.once("error", reject);
+        child.once("close", (code) => resolvePromise({ code: code ?? 3, stdout, stderr }));
+      });
+      expect(result.code, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual(expect.objectContaining({ verdict: "pass" }));
+      await expect(access(marker)).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
