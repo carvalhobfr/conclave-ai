@@ -73,7 +73,7 @@ async function resolveCommand(repository) {
   const localBinary = resolve(repository, "node_modules/.bin/conclave");
   if (await executable(localBinary)) return { command: localBinary, prefix: [] };
   if (process.env.CONCLAVE_BIN !== undefined) return { command: process.env.CONCLAVE_BIN, prefix: [] };
-  return { command: "npx", prefix: ["--yes", "--package=conclave-ai@0.15.0", "conclave"] };
+  return { command: "npx", prefix: ["--yes", "--package=conclave-ai@0.15.1", "conclave"] };
 }
 
 function commandArguments(parsed) {

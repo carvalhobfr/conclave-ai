@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.15.1] — 2026-09-26
+
+- Cockpit actions within three clicks: switching Conclave applies it immediately when the saved key matches its provider, review options fold into one Options panel with a live summary, the agent handoff copies from the summary, history entries continue a review series, provider errors link to Settings, and ⌘/Ctrl+Enter runs.
+
 ## [0.15.0] — 2026-09-26
 
 - Editable settings for global installs: `conclave config set|get|unset|edit|path` with masked secrets, per-user settings in ~/.config/conclave/credentials.env, a three-step `conclave init` that keeps the saved key, OpenCode Go in the wizard, and a shorter guided menu with More and Settings submenus.

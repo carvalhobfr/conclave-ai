@@ -92,13 +92,13 @@ const run: ProductRunView = {
 
 afterEach(() => { cleanup(); window.localStorage.clear(); vi.unstubAllGlobals(); });
 
-function mockFetch(validationResult: ValidationRunView = validation): ReturnType<typeof vi.fn> {
+function mockFetch(validationResult: ValidationRunView = validation, currentRuntime: RuntimeModeView = runtime): ReturnType<typeof vi.fn> {
   const mock = vi.fn((url: string, init?: RequestInit) => {
     const body = url === "/api/runtime/models"
       ? { provider: "opencode-go", endpoint: "https://opencode.ai/zen/go/v1/models", models: ["kimi-k2.7-code", "deepseek-v4-flash"] }
       : url === "/api/runtime" && init?.method === "POST"
       ? { saved: true, credentialUpdated: true, runtime: configuredRuntime, diagnostic: { mode: "api", provider: "opencode-go", endpoint: "https://opencode.ai/zen/go/v1", modelConfigured: true, endpointReachable: true, inferenceAvailable: true, retrievalLocal: true, externalCallsDisabled: false, message: "Bounded provider inference succeeded." } }
-      : url === "/api/runtime" ? runtime : url === "/api/projects/demo" ? project : url === "/api/validate" ? validationResult : url.startsWith("/api/history") ? [] : run;
+      : url === "/api/runtime" ? currentRuntime : url === "/api/projects/demo" ? project : url === "/api/validate" ? validationResult : url.startsWith("/api/history") ? [] : run;
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
   });
   vi.stubGlobal("fetch", mock);
@@ -205,6 +205,40 @@ describe("Conclave product UI", () => {
     expect(stored).toContain('"activeId":"free-trial"');
     expect(stored).toContain('"defaultId":"free-trial"');
     expect(stored).toContain('"free-trial"');
+  });
+});
+
+describe("three clicks or fewer", () => {
+  it("switches Conclave in one click when the saved key already belongs to its provider", async () => {
+    const fetchMock = mockFetch(validation, configuredRuntime);
+    render(<App />);
+    await screen.findByText("auth-repository");
+    fireEvent.change(screen.getByRole("combobox", { name: "Active Conclave" }), { target: { value: "free-trial" } });
+    expect(await screen.findByText("Now reviewing with Free trial.")).toBeTruthy();
+    const post = fetchMock.mock.calls.find(([url, init]) => url === "/api/runtime" && (init as RequestInit | undefined)?.method === "POST");
+    expect(JSON.parse((post?.[1] as RequestInit).body as string)).toEqual(expect.objectContaining({ provider: "opencode-go", model: "space-bunny-free" }));
+    expect(screen.queryByRole("region", { name: "Provider and role configuration" })).toBeNull();
+  });
+
+  it("opens Settings instead when the Conclave needs a different key", async () => {
+    const fetchMock = mockFetch();
+    render(<App />);
+    await screen.findByText("auth-repository");
+    fireEvent.change(screen.getByRole("combobox", { name: "Active Conclave" }), { target: { value: "free-trial" } });
+    expect(await screen.findByRole("region", { name: "Provider and role configuration" })).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/runtime" && (init as RequestInit | undefined)?.method === "POST")).toBe(false);
+  });
+
+  it("copies the agent handoff straight from the summary", async () => {
+    mockFetch();
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(<App />);
+    await screen.findByText("auth-repository");
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy handoff prompt" }));
+    expect(writeText).toHaveBeenCalledWith("Review the Conclave evidence before merging.");
+    expect(await screen.findByRole("button", { name: "Copied ✓" })).toBeTruthy();
   });
 });
 

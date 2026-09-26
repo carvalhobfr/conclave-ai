@@ -1,6 +1,6 @@
 {
   "name": "conclave-ai",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "Graph-aware independent validator for code changes and agent claims",
   "keywords": [
     "ai",

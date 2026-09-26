@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.15.1] — 2026-09-26
+
+- Ações do cockpit em até três cliques: trocar de Conclave aplica na hora quando a chave salva é do mesmo provider, as opções de review ficam num único painel Opções com resumo ao vivo, o handoff do agente é copiado direto do resumo, itens do histórico continuam uma série de review, erros de provider levam a Configurações e ⌘/Ctrl+Enter executa.
+
 ## [0.15.0] — 2026-09-26
 
 - Configurações editáveis para instalação global: `conclave config set|get|unset|edit|path` com segredos mascarados, configurações por usuário em ~/.config/conclave/credentials.env, `conclave init` em três passos que mantém a chave salva, OpenCode Go no wizard e um menu guiado mais curto com submenus Mais e Configurações.
