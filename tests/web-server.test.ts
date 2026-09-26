@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { request as httpRequest } from "node:http";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -116,7 +117,7 @@ describe("Conclave web server runtime settings", () => {
         headers: { "Content-Type": "application/json", Origin: "https://attacker.example" },
         body: JSON.stringify(payload),
       });
-      expect(rejected.status).toBe(400);
+      expect(rejected.status).toBe(403);
       const rejection = JSON.parse(await rejected.text()) as { readonly error?: { readonly code?: string } };
       expect(rejection.error?.code).toBe("untrusted_origin");
 
@@ -182,7 +183,7 @@ describe("Conclave web server runtime settings", () => {
         headers: { "Content-Type": "application/json", Origin: "https://attacker.example" },
         body: JSON.stringify({ path: "/tmp", projectId: "x", intent: "ask", query: "x" }),
       });
-      expect(foreignOrigin.status).toBe(400);
+      expect(foreignOrigin.status).toBe(403);
       const rejection = JSON.parse(await foreignOrigin.text()) as { readonly error?: { readonly code?: string } };
       expect(rejection.error?.code).toBe("untrusted_origin");
 
@@ -395,5 +396,24 @@ describe("Conclave web server routes", () => {
     expect(JSON.parse(payload)).toEqual({
       error: expect.objectContaining({ code: "internal_error" }) as unknown,
     });
+  });
+});
+
+describe("DNS rebinding", () => {
+  it("answers only requests addressed to a loopback host", async () => {
+    const origin = await listen(createConclaveWebServer({ product: new ConclaveProductService() }));
+    const port = Number(new URL(origin).port);
+    const get = (host: string, path: string) => new Promise<number>((resolvePromise, reject) => {
+      const outgoing = httpRequest({ host: "127.0.0.1", port, path, headers: { Host: host } }, (incoming) => {
+        incoming.resume();
+        resolvePromise(incoming.statusCode ?? 0);
+      });
+      outgoing.once("error", reject);
+      outgoing.end();
+    });
+    expect(await get(`attacker.example:${String(port)}`, "/api/runtime")).toBe(403);
+    expect(await get(`attacker.example:${String(port)}`, "/")).toBe(403);
+    expect(await get(`127.0.0.1:${String(port)}`, "/api/health")).toBe(200);
+    expect(await get(`localhost:${String(port)}`, "/api/health")).toBe(200);
   });
 });

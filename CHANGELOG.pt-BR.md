@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.16.3] — 2026-09-26
+
+- Quarta conferência: o servidor local do cockpit agora recusa requisições cujo Host não seja loopback, fechando a leitura de histórico, grafo e runtime por DNS rebinding; `graph`, `path`, `symbol`, `search` e `text` explicam resultados vazios ou ambíguos em vez de imprimir objetos crus ou nada; `criteria` valida o tipo de evidência, usa menus, não salva quando nada mudou e se explica sem terminal; menos falsos positivos para comentários `conclave-ignored`, Scanner sobre System.in e Popen com wait.
+
 ## [0.16.2] — 2026-09-26
 
 - Revisão de robustez em todas as superfícies: `compare` funciona em scripts e CI com objetivo inferido; prompts nunca escolhem uma opção sozinhos sem terminal e perguntam de novo após um erro de digitação; trocar de provider com `conclave config set provider` também troca o mode e limpa endpoint e modelos por papel antigos; `config unset` não diz mais que removeu chaves inexistentes; `conclave open` usa a próxima porta livre; `update --check` mostra a versão instalada; o cockpit começa com o mesmo objetivo inferido da CLI; a skill de agente e o GitHub Action não exigem mais objetivo; o MCP informa a versão real; linha de comparação traduzida.

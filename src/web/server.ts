@@ -142,6 +142,27 @@ function runtimeModelDiscovery(payload: Record<string, unknown>): RuntimeModelDi
   };
 }
 
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "[::1]", "localhost"]);
+
+/**
+ * Every request, reads included, must name a loopback host. A page on another site can rebind
+ * its own DNS name to 127.0.0.1; the browser then treats this server as same-origin with that
+ * page and lets it read repository history, graph evidence, and runtime details. The Host
+ * header still carries the attacker's name, so rejecting it closes that path.
+ */
+function assertLoopbackHost(request: IncomingMessage): void {
+  const host = request.headers.host;
+  let hostname: string | undefined;
+  try {
+    hostname = host === undefined ? undefined : new URL(`http://${host}`).hostname;
+  } catch {
+    hostname = undefined;
+  }
+  if (hostname === undefined || !LOOPBACK_HOSTS.has(hostname)) {
+    throw new ProductServiceError("untrusted_host", "This local Conclave server only answers loopback addresses.", "Open the cockpit at http://127.0.0.1 with `conclave open .`.");
+  }
+}
+
 function assertLocalBrowserOrigin(request: IncomingMessage): void {
   const origin = request.headers.origin;
   const host = request.headers.host;
@@ -149,8 +170,7 @@ function assertLocalBrowserOrigin(request: IncomingMessage): void {
     if (origin === undefined || host === undefined) throw new Error("missing origin");
     const parsedOrigin = new URL(origin);
     const parsedHost = new URL(`http://${host}`);
-    const loopback = new Set(["127.0.0.1", "[::1]", "localhost"]);
-    if (parsedOrigin.protocol !== "http:" || parsedOrigin.host !== parsedHost.host || !loopback.has(parsedOrigin.hostname)) {
+    if (parsedOrigin.protocol !== "http:" || parsedOrigin.host !== parsedHost.host || !LOOPBACK_HOSTS.has(parsedOrigin.hostname)) {
       throw new Error("untrusted origin");
     }
   } catch {
@@ -231,6 +251,7 @@ export function createConclaveWebServer(options: ConclaveWebServerOptions = {}) 
   const handler = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     try {
       const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      assertLoopbackHost(request);
       if (request.method === "POST") assertLocalJsonPost(request);
       if (url.pathname === "/api/health" && request.method === "GET") { send(response, 200, { ok: true }); return; }
       if (url.pathname === "/api/runtime" && request.method === "GET") { send(response, 200, product.runtime()); return; }
@@ -300,7 +321,7 @@ export function createConclaveWebServer(options: ConclaveWebServerOptions = {}) 
       response.end(request.method === "HEAD" ? undefined : content);
     } catch (error) {
       const known = error instanceof ProductServiceError;
-      send(response, known ? 400 : 500, {
+      send(response, known ? (error.code === "untrusted_host" || error.code === "untrusted_origin" ? 403 : 400) : 500, {
         error: {
           code: known ? error.code : "internal_error",
           message: known ? error.message : "Conclave local server could not complete this request.",

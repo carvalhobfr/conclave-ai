@@ -78,6 +78,7 @@ import { ConclaveProductService } from "./web/product-service.js";
 import { createConclaveWebServer } from "./web/server.js";
 import { LocalFolderRepository } from "./repositories/local-folder-repository.js";
 import { CodeRetrievalService } from "./retrieval/code-retrieval-service.js";
+import type { GraphNode } from "./graph/graph-query.js";
 import { StructuredAgentRuntime } from "./reasoning/agent-runtime.js";
 import { inferReasoningChangeContext } from "./reasoning/change-context.js";
 import { ReasoningEngine } from "./reasoning/reasoning-engine.js";
@@ -235,6 +236,10 @@ function printEvidenceResults(results: readonly {
   readonly signals?: unknown;
   readonly reasons?: unknown;
 }[]): void {
+  if (results.length === 0) {
+    console.log("No matches. Try other words, a shorter query, or `conclave search . <words>` for a ranked search.");
+    return;
+  }
   for (const [index, result] of results.entries()) {
     const rank = result.rank ?? index + 1;
     const symbol = result.evidence.symbol === undefined ? "<file>" : result.evidence.symbol;
@@ -312,6 +317,21 @@ async function retrievePlannedContext(args: readonly string[]): Promise<void> {
   );
 }
 
+function nodeLabel(node: GraphNode): string {
+  return `${node.path}${node.symbol === undefined ? "" : ` :: ${node.symbol}`}${node.startLine === undefined ? "" : `:${String(node.startLine)}`}`;
+}
+
+/** Human explanation for a name that did not resolve to exactly one indexed node. */
+function unresolvedMessage(query: string, resolution: { readonly status: "not-found" } | { readonly status: "ambiguous"; readonly candidates: readonly GraphNode[] }): string {
+  if (resolution.status === "not-found") {
+    return `No code unit or indexed file named \`${query}\`. Find the right name with \`conclave search . ${query}\`.`;
+  }
+  return [
+    `\`${query}\` matches ${String(resolution.candidates.length)} code units; use a file path to pick one:`,
+    ...resolution.candidates.slice(0, 10).map((node) => `  ${nodeLabel(node)}`),
+  ].join("\n");
+}
+
 async function queryGraph(args: readonly string[]): Promise<void> {
   const parsed = parseArguments(args);
   const requestedPath = parsed.positionals[0];
@@ -324,7 +344,8 @@ async function queryGraph(args: readonly string[]): Promise<void> {
   const fileResolution = graph.getNodeByFile(entity);
   const resolution = fileResolution.status === "resolved" ? fileResolution : graph.getNodeBySymbol(entity);
   if (resolution.status !== "resolved") {
-    print({ entity, resolution }, parsed.json);
+    if (parsed.json) print({ entity, resolution }, true);
+    else console.log(unresolvedMessage(entity, resolution));
     return;
   }
   const limits = { maxDepth: parsed.depth, maxNodes: parsed.limit };
@@ -356,6 +377,7 @@ async function queryGraph(args: readonly string[]): Promise<void> {
     return;
   }
   console.log(`${resolution.node.path} :: ${resolution.node.symbol ?? "<file>"}`);
+  if (results.length === 0) console.log(`No ${parsed.graphOperation} relationships found. Try \`--operation neighbors\` for every direct relationship.`);
   for (const result of results) {
     console.log(
       `${result.direction} ${result.edge.relation} -> ${result.node.path} :: ${result.node.symbol ?? "<file>"}`,
@@ -384,8 +406,12 @@ async function queryPath(args: readonly string[]): Promise<void> {
     print({ from, to, result }, true);
     return;
   }
-  if (result.status !== "found") {
-    print(result, false);
+  if (result.status === "not-found" || result.status === "ambiguous") {
+    console.log(unresolvedMessage(result.query, result));
+    return;
+  }
+  if (result.status === "no-path") {
+    console.log(`No relationship path from ${nodeLabel(result.from)} to ${nodeLabel(result.to)} within depth ${String(result.limits.maxDepth)}. Raise --depth, or inspect each side with \`conclave graph . <name>\`.`);
     return;
   }
   console.log(result.nodes.map((node) => node.symbol ?? node.path).join(" -> "));
@@ -930,21 +956,35 @@ async function editAcceptance(args: readonly string[]): Promise<void> {
   const root = resolve(parsed.positionals[0] ?? ".");
   const saved = await loadAcceptanceContract(root);
   if (parsed.json) { console.log(JSON.stringify(saved, null, 2)); return; }
-  const prompt = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const objective = await prompt.question("Delivery objective (blank keeps saved): ");
-    const contract = saved?.contract ?? createValidationContract(objective);
-    const criteria = [...(contract.criteria ?? [])];
-    const statement = await prompt.question("New acceptance criterion (blank keeps existing): ");
-    if (statement.trim()) {
-      const verificationPlan = await prompt.question("How will this criterion be tested or reviewed? ");
-      const kind = await prompt.question("Evidence kind (test/runtime/human): ");
-      const confirmed = (await prompt.question("Confirm this criterion and plan? (yes/no): ")).trim().toLowerCase() === "yes";
-      criteria.push({ id: randomUUID(), statement, verificationPlan, kind: kind as "test", confirmed, claimIds: [], implementationPaths: [] });
-    }
-    const next = await saveAcceptanceContract(root, { ...contract, objective: objective.trim() || contract.objective, criteria }, saved?.revision ?? null);
-    console.log("Saved acceptance contract " + next.revision + ". Run conclave check to review it.");
-  } finally { prompt.close(); }
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error("criteria needs an interactive terminal. Read the saved criteria with `conclave criteria . --json`, or edit them in the cockpit with `conclave open .`.");
+  }
+  const color = terminalColorEnabled();
+  const current = saved?.contract.objective ?? "";
+  const objective = (await promptLine("Delivery objective", current === "" ? undefined : current)).trim();
+  const contract = saved?.contract ?? createValidationContract(objective);
+  const criteria = [...(contract.criteria ?? [])];
+  const statement = (await promptLine("New acceptance criterion (Enter to skip)", "")).trim();
+  if (statement !== "") {
+    const verificationPlan = (await promptLine("How will it be tested or reviewed?")).trim();
+    const kind = (await promptChoice("Evidence kind", [
+      { id: "test", label: "Test execution", description: "A test run proves it" },
+      { id: "runtime", label: "Runtime observation", description: "Running the app shows it" },
+      { id: "human", label: "Human decision", description: "A person confirms it" },
+    ] as const, color)).id;
+    const confirmed = (await promptChoice("Confirm this criterion and plan?", [
+      { id: "yes", label: "Yes", description: "Evidence can support it in reviews" },
+      { id: "no", label: "Not yet", description: "Saved as unconfirmed" },
+    ] as const, color)).id === "yes";
+    criteria.push({ id: randomUUID(), statement, verificationPlan, kind, confirmed, claimIds: [], implementationPaths: [] });
+  }
+  const nextObjective = objective || contract.objective;
+  if (saved !== null && statement === "" && nextObjective === saved.contract.objective) {
+    console.log("Nothing changed. Saved criteria stay as they are.");
+    return;
+  }
+  const next = await saveAcceptanceContract(root, { ...contract, objective: nextObjective, criteria }, saved?.revision ?? null);
+  console.log(`Saved acceptance criteria (${String(criteria.length)}) as revision ${next.revision}. Run \`conclave check .\` to review against them.`);
 }
 
 async function loadValidationContract(parsed: ParsedArguments): Promise<ValidationContract> {

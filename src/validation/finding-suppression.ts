@@ -1,8 +1,8 @@
 import type { RepositoryCodeIndex } from "../domain/code-index.js";
 import type { ValidationFinding } from "../domain/validation.js";
 
-// `// conclave-ignore`, `# conclave-ignore: empty-catch`, `/* conclave-ignore kind-a, kind-b */`
-const DIRECTIVE = /conclave-ignore(?:[:\s]+([a-z0-9-]+(?:\s*,\s*[a-z0-9-]+)*))?/iu;
+// `// conclave-ignore`, `# conclave-ignore: discarded-error`, `/* conclave-ignore kind-a, kind-b */`
+const DIRECTIVE = /\bconclave-ignore(?![\w-])(?:[:\s]+([a-z0-9-]+(?:\s*,\s*[a-z0-9-]+)*))?/iu;
 
 function directiveKinds(line: string | undefined): readonly string[] | "all" | undefined {
   if (line === undefined) return undefined;

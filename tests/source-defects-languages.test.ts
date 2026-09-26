@@ -78,3 +78,16 @@ describe("inline suppressions", () => {
     expect(applyInlineSuppressions(files, [blocking])[0]?.severity).toBe("blocking");
   });
 });
+
+describe("rule precision", () => {
+  it("does not treat a longer word as a suppression directive", () => {
+    const files = index({ "a.ts": "try { g(); } catch {} // conclave-ignored by mistake\n" });
+    const warning: ValidationFinding = { id: "f", fingerprint: "p", kind: "discarded-error", severity: "warning", title: "t", detail: "d.", remediation: "r", evidence: [{ path: "a.ts", startLine: 1, endLine: 1, reason: "x" }] };
+    expect(applyInlineSuppressions(files, [warning])[0]?.severity).toBe("warning");
+  });
+
+  it("leaves a Scanner over System.in open and accepts a waited Popen", () => {
+    expect(defects("C.java", "class C {\n  void f() {\n    Scanner in = new Scanner(System.in);\n    in.nextLine();\n  }\n}\n")).toEqual([]);
+    expect(defects("run.py", "import subprocess\nchild = subprocess.Popen(['ls'])\nchild.wait()\n")).toEqual([]);
+  });
+});

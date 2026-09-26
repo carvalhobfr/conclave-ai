@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.16.3] — 2026-09-26
+
+- Fourth review pass: the local cockpit server now rejects requests whose Host is not loopback, closing a DNS-rebinding read of history, graph, and runtime details; `graph`, `path`, `symbol`, `search`, and `text` explain empty or ambiguous results instead of printing raw objects or nothing; `criteria` validates the evidence kind, accepts menu choices, skips saving when nothing changed, and explains itself without a terminal; fewer false positives for `conclave-ignored` comments, Scanner over System.in, and waited Popen.
+
 ## [0.16.2] — 2026-09-26
 
 - Robustness pass across every surface: `compare` works in scripts and CI with an inferred objective; prompts never pick an option silently without a terminal and re-ask after a typo; switching provider with `conclave config set provider` also switches mode and resets the old endpoint and role models; `config unset` no longer claims to remove missing keys; `conclave open` moves to the next free port; `update --check` shows the installed version; the cockpit starts from the same inferred objective as the CLI; the agent skill and GitHub Action no longer require an objective; MCP reports the real version; localized comparison line.

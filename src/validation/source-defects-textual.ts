@@ -68,7 +68,7 @@ function analyzePython(file: ValidationChangedFile, text: string): SourceDefect[
     const resource = PYTHON_RESOURCES.exec(line);
     if (resource !== null && touches(file, number, number)) {
       const name = resource[1] ?? "";
-      const released = new RegExp(`\\b${escapeRegExp(name)}\\s*\\.\\s*(?:close|shutdown|terminate|kill|__exit__)\\s*\\(|with\\s+(?:contextlib\\.)?closing\\(\\s*${escapeRegExp(name)}\\s*\\)|with\\s+${escapeRegExp(name)}\\b`, "u").test(text);
+      const released = new RegExp(`\\b${escapeRegExp(name)}\\s*\\.\\s*(?:close|shutdown|terminate|kill|wait|communicate|__exit__)\\s*\\(|with\\s+(?:contextlib\\.)?closing\\(\\s*${escapeRegExp(name)}\\s*\\)|with\\s+${escapeRegExp(name)}\\b`, "u").test(text);
       if (!released) {
         defects.push(make(file, number, UNRELEASED, `${resource[2] ?? "resource"}() is assigned to ${name} outside a with block, and this file has no matching close. Ownership may be transferred elsewhere; runtime lifetime is not proven by this check.`));
       }
@@ -98,7 +98,8 @@ function analyzeJava(file: ValidationChangedFile, text: string): SourceDefect[] 
   for (const [index, line] of text.split(/\r?\n/u).entries()) {
     const number = index + 1;
     const resource = JAVA_RESOURCE.exec(line);
-    if (resource === null || /\btry\s*\(/u.test(line) || !touches(file, number, number)) continue;
+    // Closing a Scanner over System.in would close the process's standard input, so it is left open on purpose.
+    if (resource === null || /\btry\s*\(/u.test(line) || /Scanner\s*\(\s*System\.in\s*\)/u.test(line) || !touches(file, number, number)) continue;
     const name = resource[1] ?? "";
     const kind = resource[2] ?? resource[3] ?? "resource";
     const released = new RegExp(`\\b${escapeRegExp(name)}\\s*\\.\\s*(?:close|shutdown|shutdownNow)\\s*\\(|try\\s*\\([^)]*\\b${escapeRegExp(name)}\\b`, "u").test(text);
