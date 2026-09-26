@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.16.4] — 2026-09-26
+
+- Correções de Windows e CI: o runner da skill de agente e o `conclave update` não falham mais no Windows, onde npm, npx e um `conclave` global são shims `.cmd` (agora rodam pelos entry points JavaScript); `conclave config edit` abre editores `.cmd`; o cockpit abre Options sozinho quando há critérios salvos; um publish de tag que falhou pode ser repetido com `npm run release:tag`.
+
 ## [0.16.3] — 2026-09-26
 
 - Quarta conferência: o servidor local do cockpit agora recusa requisições cujo Host não seja loopback, fechando a leitura de histórico, grafo e runtime por DNS rebinding; `graph`, `path`, `symbol`, `search` e `text` explicam resultados vazios ou ambíguos em vez de imprimir objetos crus ou nada; `criteria` valida o tipo de evidência, usa menus, não salva quando nada mudou e se explica sem terminal; menos falsos positivos para comentários `conclave-ignored`, Scanner sobre System.in e Popen com wait.

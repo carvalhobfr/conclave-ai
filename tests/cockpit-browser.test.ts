@@ -23,6 +23,7 @@ it.skipIf(process.env["CONCLAVE_BROWSER_TESTS"] !== "1")("saves criteria, reload
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     const errors: string[] = []; page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${String(address.port)}/?repository=${encodeURIComponent(root)}`);
+    await page.locator("summary", { hasText: "Options" }).click();
     await page.getByRole("button", { name: "Add criterion", exact: true }).click();
     await page.getByLabel(/Expected result/u).fill("Survives reload");
     await page.getByLabel("Verification plan", { exact: true }).fill("Save, reload, read");

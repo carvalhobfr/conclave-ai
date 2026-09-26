@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -36,7 +36,7 @@ describe("config keys", () => {
 
 describe("user settings file", () => {
   it("lives next to the global preferences", () => {
-    expect(globalEnvironmentPath({ CONCLAVE_CONFIG_HOME: "/tmp/conclave-home" })).toBe("/tmp/conclave-home/credentials.env");
+    expect(globalEnvironmentPath({ CONCLAVE_CONFIG_HOME: "/tmp/conclave-home" })).toBe(resolve("/tmp/conclave-home", "credentials.env"));
   });
 
   it("prefers a project .env only when it already defines Conclave keys", async () => {

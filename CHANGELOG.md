@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.16.4] — 2026-09-26
+
+- Windows and CI fixes: the agent skill runner and `conclave update` no longer fail on Windows, where npm, npx, and a global `conclave` are `.cmd` shims (they now run through their JavaScript entry points); `conclave config edit` opens `.cmd` editors; the cockpit opens Options automatically when saved criteria exist; a failed tag publish can be retried with `npm run release:tag`.
+
 ## [0.16.3] — 2026-09-26
 
 - Fourth review pass: the local cockpit server now rejects requests whose Host is not loopback, closing a DNS-rebinding read of history, graph, and runtime details; `graph`, `path`, `symbol`, `search`, and `text` explain empty or ambiguous results instead of printing raw objects or nothing; `criteria` validates the evidence kind, accepts menu choices, skips saving when nothing changed, and explains itself without a terminal; fewer false positives for `conclave-ignored` comments, Scanner over System.in, and waited Popen.

@@ -82,6 +82,14 @@ async function commandOnPath(name) {
   return undefined;
 }
 
+// Windows installs `conclave.cmd`, which Node cannot spawn without a shell; npm keeps the package
+// next to that shim, so run its JavaScript entry point with this Node instead.
+async function windowsShim(path) {
+  if (process.platform !== "win32" || !/\.(?:cmd|bat)$/iu.test(path)) return undefined;
+  const entrypoint = await conclaveEntrypoint(resolve(dirname(path), "node_modules", "conclave-ai"));
+  return entrypoint === undefined ? undefined : { command: process.execPath, prefix: [entrypoint] };
+}
+
 async function resolveCommand(repository) {
   const explicitEntrypoint = process.env.CONCLAVE_CLI_PATH;
   if (explicitEntrypoint !== undefined) {
@@ -94,11 +102,17 @@ async function resolveCommand(repository) {
     const entrypoint = await conclaveEntrypoint(packageRoot);
     if (entrypoint !== undefined) return { command: process.execPath, prefix: [entrypoint] };
   }
-  if (process.env.CONCLAVE_BIN !== undefined) return { command: process.env.CONCLAVE_BIN, prefix: [] };
+  if (process.env.CONCLAVE_BIN !== undefined) return (await windowsShim(process.env.CONCLAVE_BIN)) ?? { command: process.env.CONCLAVE_BIN, prefix: [] };
   // A global `npm install -g conclave-ai` avoids a network fetch on every review.
   const installed = await commandOnPath("conclave");
-  if (installed !== undefined) return { command: installed, prefix: [] };
-  return { command: "npx", prefix: ["--yes", "--package=conclave-ai@0.16.3", "conclave"] };
+  if (installed !== undefined) {
+    const shim = await windowsShim(installed);
+    if (shim !== undefined) return shim;
+    if (process.platform !== "win32") return { command: installed, prefix: [] };
+  }
+  const npx = join(dirname(process.execPath), "node_modules", "npm", "bin", "npx-cli.js");
+  const npxCommand = process.platform === "win32" && await executable(npx) ? { command: process.execPath, prefix: [npx] } : { command: "npx", prefix: [] };
+  return { command: npxCommand.command, prefix: [...npxCommand.prefix, "--yes", "--package=conclave-ai@0.16.4", "conclave"] };
 }
 
 function commandArguments(parsed) {

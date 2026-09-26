@@ -6,8 +6,9 @@ import { loadAttestedEvidence } from "./validation/attested-evidence.js";
 import { loadAcceptanceContract, saveAcceptanceContract } from "./storage/acceptance-contract.js";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 
@@ -614,9 +615,21 @@ function selectedChangeSource(parsed: ParsedArguments): ChangeSource {
   return selected[0] ?? { kind: "working" };
 }
 
-function runExternalCommand(command: string, args: readonly string[]): Promise<number> {
+/**
+ * On Windows, npm and npx are `.cmd` shims that Node refuses to spawn without a shell. Running
+ * their JavaScript entry points with this Node keeps `shell: false` and its argument safety.
+ */
+function spawnable(command: string, args: readonly string[]): { readonly command: string; readonly args: readonly string[]; readonly shell: boolean } {
+  if (process.platform !== "win32" || (command !== "npm" && command !== "npx")) return { command, args, shell: false };
+  const entry = join(dirname(process.execPath), "node_modules", "npm", "bin", `${command}-cli.js`);
+  // The shell fallback only ever receives Conclave's own constant npm arguments.
+  return existsSync(entry) ? { command: process.execPath, args: [entry, ...args], shell: false } : { command: `${command}.cmd`, args, shell: true };
+}
+
+function runExternalCommand(command: string, args: readonly string[], options: { readonly shell?: boolean } = {}): Promise<number> {
+  const target = spawnable(command, args);
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, [...args], { stdio: "inherit", shell: false });
+    const child = spawn(target.command, [...target.args], { stdio: "inherit", shell: options.shell ?? target.shell });
     child.once("error", reject);
     child.once("exit", (code, signal) => {
       if (signal !== null) {
@@ -633,11 +646,12 @@ function captureExternalCommand(
   args: readonly string[],
   cwd?: string,
 ): Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }> {
+  const target = spawnable(command, args);
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, [...args], {
+    const child = spawn(target.command, [...target.args], {
       cwd: cwd === undefined ? undefined : resolve(cwd),
       stdio: ["ignore", "pipe", "pipe"],
-      shell: false,
+      shell: target.shell,
     });
     let stdout = "";
     let stderr = "";
@@ -1500,7 +1514,10 @@ async function editConfigFile(path: string): Promise<void> {
   if (!process.stdin.isTTY) { console.log(path); return; }
   console.log(`Opening ${path} with ${editor}…`);
   const [command = editor, ...editorArgs] = editor.split(" ").filter((part) => part !== "");
-  const code = await runExternalCommand(command, [...editorArgs, path]);
+  // Windows editors are often `.cmd` launchers (code, subl), which only a shell can start; the
+  // settings path is quoted because the shell joins arguments with spaces.
+  const windows = process.platform === "win32";
+  const code = await runExternalCommand(command, [...editorArgs, windows ? `"${path}"` : path], { shell: windows });
   if (code !== 0) throw new Error(`${editor} exited with code ${String(code)}`);
 }
 

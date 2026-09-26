@@ -15,8 +15,9 @@ if (run("git", ["status", "--porcelain"]) !== "") {
 if (run("git", ["tag", "--list", tag]) !== "") {
   // Re-running after a failed publish (for example before trusted publishing was configured)
   // should retry that release, not demand a new version.
-  let published = false;
-  try { published = run("npm", ["view", `conclave-ai@${version}`, "version"]) === version; } catch { published = false; }
+  const published = (() => {
+    try { return run("npm", ["view", `conclave-ai@${version}`, "version"]) === version; } catch { return false; }
+  })();
   if (published) {
     console.error(`${tag} is already published. Run \`npm run release:bump -- patch "…"\` for a new version.`);
     process.exit(1);

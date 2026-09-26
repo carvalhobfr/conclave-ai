@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { access, chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -96,9 +97,16 @@ describe("runner command resolution", () => {
       await writeFile(join(repository, "dist/cli.js"), `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "x");`);
       const bin = join(root, "bin");
       await mkdir(bin);
+      // Mirrors a global npm install: a launcher on PATH (`conclave` or `conclave.cmd`) with the
+      // package beside it, so the runner resolves it the same way on every platform.
       const shim = join(bin, "conclave");
       await writeFile(shim, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(resolve("tests/fixtures/agent-skill/fake-conclave.mjs"))} "$@"\n`);
       await chmod(shim, 0o755);
+      await writeFile(join(bin, "conclave.cmd"), "@echo off\r\n");
+      const globalPackage = join(bin, "node_modules", "conclave-ai");
+      await mkdir(join(globalPackage, "dist"), { recursive: true });
+      await writeFile(join(globalPackage, "package.json"), JSON.stringify({ name: "conclave-ai", type: "module" }));
+      await writeFile(join(globalPackage, "dist", "cli.js"), `await import(${JSON.stringify(pathToFileURL(resolve("tests/fixtures/agent-skill/fake-conclave.mjs")).href)});\n`);
       const environment: NodeJS.ProcessEnv = { ...process.env, PATH: `${bin}${delimiter}${process.env["PATH"] ?? ""}`, CONCLAVE_FIXTURE_SCHEMA: "5" };
       delete environment["CONCLAVE_CLI_PATH"];
       delete environment["CONCLAVE_BIN"];
