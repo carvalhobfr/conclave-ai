@@ -157,3 +157,23 @@ describe("GitChangeSetService parsers", () => {
   });
 
 });
+
+describe("friendly ref handling", () => {
+  it("accepts relative revisions such as HEAD~1", async () => {
+    const root = await mkdtemp(join(tmpdir(), "conclave-relative-ref-"));
+    await writeFile(join(root, "a.ts"), "export const a = 1;\n");
+    await runGit(root, ["init", "-b", "master"]);
+    await runGit(root, ["add", "."]);
+    await runGit(root, ["commit", "-m", "one"]);
+    await writeFile(join(root, "a.ts"), "export const a = 2;\n");
+    await runGit(root, ["commit", "-am", "two"]);
+    const changeSet = await new GitChangeSetService().collect(root, { kind: "workspace", base: "HEAD~1" });
+    expect(changeSet.files.map((file) => file.path)).toEqual(["a.ts"]);
+  });
+
+  it("explains a repository without commits instead of suggesting git fetch", async () => {
+    const root = await mkdtemp(join(tmpdir(), "conclave-no-commits-"));
+    await runGit(root, ["init", "-b", "master"]);
+    await expect(new GitChangeSetService().collect(root, { kind: "workspace", base: "HEAD" })).rejects.toThrow(/no commits yet/);
+  });
+});

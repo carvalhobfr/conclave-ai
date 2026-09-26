@@ -24,7 +24,7 @@ const COPY = {
     next: "Next",
     unverified: (count: number) => `${String(count)} ${count === 1 ? "item still needs" : "items still need"} verification`,
     commands: "Agent prompt: conclave handoff .  ·  Details: --verbose  ·  Browser: conclave open .",
-    nothing: "Nothing to review: Git found no changed files in this comparison.",
+    nothing: "Nothing to review: Git found no changed files in this comparison.\nMake a change, pick a base with --base <ref>, or compare branches with `conclave compare .`.",
   },
   "pt-BR": {
     changed: (files: number, affected: number) =>
@@ -35,7 +35,7 @@ const COPY = {
     next: "Próximo passo",
     unverified: (count: number) => `${String(count)} ${count === 1 ? "item ainda precisa" : "itens ainda precisam"} de verificação`,
     commands: "Prompt para o agente: conclave handoff .  ·  Detalhes: --verbose  ·  Navegador: conclave open .",
-    nothing: "Nada para revisar: o Git não encontrou arquivos alterados nesta comparação.",
+    nothing: "Nada para revisar: o Git não encontrou arquivos alterados nesta comparação.\nFaça uma mudança, escolha uma base com --base <ref> ou compare branches com `conclave compare .`.",
   },
   "es-ES": {
     changed: (files: number, affected: number) =>
@@ -46,7 +46,7 @@ const COPY = {
     next: "Siguiente paso",
     unverified: (count: number) => `${String(count)} ${count === 1 ? "elemento aún necesita" : "elementos aún necesitan"} verificación`,
     commands: "Prompt para el agente: conclave handoff .  ·  Detalles: --verbose  ·  Navegador: conclave open .",
-    nothing: "Nada que revisar: Git no encontró archivos cambiados en esta comparación.",
+    nothing: "Nada que revisar: Git no encontró archivos cambiados en esta comparación.\nHaz un cambio, elige una base con --base <ref> o compara ramas con `conclave compare .`.",
   },
 } as const;
 

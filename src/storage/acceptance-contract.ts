@@ -4,13 +4,14 @@ import { join } from "node:path";
 import type { ValidationContract } from "../domain/validation.js";
 import { parseValidationContract } from "../validation/contract-parser.js";
 import { validationDigest } from "../validation/review-lineage.js";
+import { ensureConclaveDirectory } from "./conclave-directory.js";
 
 export interface SavedAcceptanceContract { readonly revision: string; readonly contract: ValidationContract }
 
 async function location(root: string): Promise<string> {
   const canonical = await realpath(root);
   const directory = join(canonical, ".conclave");
-  await mkdir(directory, { recursive: true, mode: 0o700 });
+  await ensureConclaveDirectory(directory);
   if (await realpath(directory) !== directory) throw new Error("Acceptance storage must be inside the repository, without symlinks");
   const path = join(directory, "acceptance-contract.json");
   const details = await lstat(path).catch((error: unknown) => {

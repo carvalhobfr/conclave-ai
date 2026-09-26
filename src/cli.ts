@@ -457,6 +457,24 @@ async function evaluateGraphRetrieval(args: readonly string[]): Promise<void> {
   print(report, parsed.json);
 }
 
+/** Loads the provider setup for Ask and Investigate, turning configuration gaps into a next step. */
+function reasoningSetup() {
+  try {
+    const runtimeConfig = loadRuntimeConfig();
+    const reasoningConfig = loadReasoningConfiguration(runtimeConfig);
+    const providers = createRoleProviders(runtimeConfig, reasoningConfig.assignments, new EnvironmentCredentialSource());
+    return { runtimeConfig, reasoningConfig, providers };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    const hint = {
+      en: "Ask and Investigate need an AI provider. Run `conclave init` to set one up, or `conclave config` to see what is set. Review (`conclave check`) never needs one.",
+      "pt-BR": "Ask e Investigate precisam de um provider de IA. Rode `conclave init` para configurar, ou `conclave config` para ver o que está definido. O review (`conclave check`) nunca precisa de um.",
+      "es-ES": "Ask e Investigate necesitan un proveedor de IA. Ejecuta `conclave init` para configurarlo, o `conclave config` para ver lo definido. La revisión (`conclave check`) nunca lo necesita.",
+    }[cliLanguage];
+    throw new Error(`${reason}\n${hint}`, { cause: error });
+  }
+}
+
 async function reasonAboutRepository(args: readonly string[], intent: "ask" | "investigate"): Promise<void> {
   const parsed = parseArguments(args);
   const requestedPath = parsed.positionals[0];
@@ -464,9 +482,7 @@ async function reasonAboutRepository(args: readonly string[], intent: "ask" | "i
   if (requestedPath === undefined || question === "") {
     throw new Error(`${intent} requires a repository path and question`);
   }
-  const runtimeConfig = loadRuntimeConfig();
-  const reasoningConfig = loadReasoningConfiguration(runtimeConfig);
-  const providers = createRoleProviders(runtimeConfig, reasoningConfig.assignments, new EnvironmentCredentialSource());
+  const { reasoningConfig, providers } = reasoningSetup();
   const indexed = await updateIndex(requestedPath);
   const retrieval = new CodeRetrievalService(indexed.index, indexed.embeddingProvider);
   const runtime = new StructuredAgentRuntime(
@@ -1834,6 +1850,33 @@ async function runDemo(): Promise<void> {
   print({ deterministicDemo: true, project, ask, investigate }, true);
 }
 
+const KNOWN_COMMANDS = [
+  "check", "compare", "open", "review", "validate", "pr", "history", "handoff", "doctor", "setup", "update", "start",
+  "scan", "index", "search", "retrieve", "symbol", "text", "graph", "path", "ask", "investigate", "smoke", "collect",
+  "criteria", "eval", "eval-graph", "eval-reasoning", "config", "models", "init", "skill", "provider-check", "mcp", "demo", "help",
+] as const;
+
+function editDistance(left: string, right: string): number {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) {
+      const cost = left[row - 1] === right[column - 1] ? 0 : 1;
+      current.push(Math.min((previous[column] ?? 0) + 1, (current[column - 1] ?? 0) + 1, (previous[column - 1] ?? 0) + cost));
+    }
+    previous = current;
+  }
+  return previous[right.length] ?? Number.POSITIVE_INFINITY;
+}
+
+function closestCommand(input: string): string | undefined {
+  const normalized = input.toLowerCase();
+  const best = KNOWN_COMMANDS
+    .map((candidate) => ({ candidate, distance: editDistance(normalized, candidate) }))
+    .sort((left, right) => left.distance - right.distance)[0];
+  return best !== undefined && best.distance <= Math.max(1, Math.floor(normalized.length / 3)) ? best.candidate : undefined;
+}
+
 async function main(): Promise<void> {
   await loadCliLanguage();
   const [command = "help", ...args] = process.argv.slice(2);
@@ -1962,8 +2005,11 @@ async function main(): Promise<void> {
     case "-h":
       console.log(cliHelp(cliLanguage, args.join(" ").trim() || undefined));
       return;
-    default:
-      throw new Error(`${interfaceCopy(cliLanguage).unknownCommand}: ${command}\n\n${cliHelp(cliLanguage)}`);
+    default: {
+      const suggestion = closestCommand(command);
+      const didYouMean = suggestion === undefined ? "" : ` — ${{ en: "did you mean", "pt-BR": "você quis dizer", "es-ES": "¿quisiste decir" }[cliLanguage]} \`conclave ${suggestion}\`?`;
+      throw new Error(`${interfaceCopy(cliLanguage).unknownCommand}: ${command}${didYouMean}\n${{ en: "All commands", "pt-BR": "Todos os comandos", "es-ES": "Todos los comandos" }[cliLanguage]}: conclave help`);
+    }
   }
 }
 

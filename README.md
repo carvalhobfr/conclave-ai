@@ -224,7 +224,7 @@ Yes. Node.js is only Conclave's runtime. TypeScript, JavaScript, Python, and Jav
 Add `conclave-ignore` in a comment on that line or the line above, optionally naming the rule: `// conclave-ignore: discarded-error` or `# conclave-ignore unreleased-resource`. The finding stays in the JSON as a note and stops affecting the verdict. Blocking findings cannot be silenced inline.
 
 **Should I commit `.conclave/`?**
-No. Add `.conclave/` to your `.gitignore`; it holds the local cache and review history.
+No, and you don't have to do anything: Conclave creates `.conclave/` with its own `.gitignore`, so the local cache and review history never show up in `git status`.
 
 **Does `PASS` mean I can merge?**
 No. It means the deterministic checks found no blocker or warning. Run your tests and have a person review. Conclave never approves or merges.

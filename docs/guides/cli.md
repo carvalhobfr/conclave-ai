@@ -238,7 +238,7 @@ Every setting can come from the shell, a project `.env`, or user settings (`conc
 
 | Path | Contents | Commit it? |
 | --- | --- | --- |
-| `.conclave/` | Code map cache, review history, criteria, finding feedback | No, add it to `.gitignore` |
+| `.conclave/` | Code map cache, review history, criteria, finding feedback | No; it ignores itself automatically |
 | `~/.config/conclave/credentials.env` | Provider settings and keys (`0600`) | Never |
 | `~/.config/conclave/config.json` | Interface language | — |
 | `.claude/skills/`, `.agents/skills/` | Agent skill, from `conclave setup` | Yes, to share with your team |

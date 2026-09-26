@@ -13,7 +13,8 @@ import type {
 
 const MAX_GIT_OUTPUT_BYTES = 5_000_000;
 const GIT_TIMEOUT_MS = 15_000;
-const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._/@{}+-]*$/u;
+// `~` and `^` allow relative revisions such as HEAD~3; Git runs without a shell, so they are inert.
+const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._/@{}+~^-]*$/u;
 /**
  * Conclave writes its index and review history here. Reviewing its own output would let one
  * run contaminate the next: the stored reports carry every risk term the router looks for.
@@ -273,10 +274,15 @@ async function untrackedDiff(repositoryRoot: string, entries: readonly string[])
 }
 
 async function refExists(repositoryRoot: string, ref: string, label: string): Promise<void> {
+  const checked = safeRef(ref, label);
   try {
-    await runGit(repositoryRoot, ["rev-parse", "--verify", `${safeRef(ref, label)}^{commit}`]);
+    await runGit(repositoryRoot, ["rev-parse", "--verify", `${checked}^{commit}`]);
   } catch (error) {
-    throw new Error(`${label} ref does not exist or is not available locally: ${ref}. Run git fetch and retry.`, { cause: error });
+    const hasCommits = await runGit(repositoryRoot, ["rev-parse", "--verify", "HEAD^{commit}"]).then(() => true, () => false);
+    if (!hasCommits) {
+      throw new Error("This repository has no commits yet. Make a first commit, then run the review again.", { cause: error });
+    }
+    throw new Error(`${label} ref does not exist or is not available locally: ${ref}. Check the name, or run git fetch if it is a remote branch.`, { cause: error });
   }
 }
 

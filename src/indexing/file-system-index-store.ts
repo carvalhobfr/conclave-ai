@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
@@ -11,6 +11,7 @@ import {
 } from "../domain/code-index.js";
 import { isPathInside, resolveRepositoryRoot } from "../security/path-policy.js";
 import { assessRepositoryContent } from "../security/content-safety.js";
+import { ensureConclaveDirectory } from "../storage/conclave-directory.js";
 
 export const CODE_INDEX_DIRECTORY = ".conclave";
 export const CODE_INDEX_FILENAME = "code-index-v2.json";
@@ -229,7 +230,7 @@ export class FileSystemCodeIndexStore implements CodeIndexStore {
     const indexDirectory = join(canonicalRoot, CODE_INDEX_DIRECTORY);
     const indexPath = join(indexDirectory, CODE_INDEX_FILENAME);
     const temporaryPath = join(indexDirectory, `${CODE_INDEX_FILENAME}.${randomUUID()}.tmp`);
-    await mkdir(indexDirectory, { recursive: true, mode: 0o700 });
+    await ensureConclaveDirectory(indexDirectory);
     await writeFile(temporaryPath, `${JSON.stringify(index)}\n`, { mode: 0o600 });
     await rename(temporaryPath, indexPath);
     await chmod(indexPath, 0o600);

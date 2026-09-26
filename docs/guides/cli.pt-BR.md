@@ -238,7 +238,7 @@ Toda configuração pode vir do shell, de um `.env` do projeto ou das configura�
 
 | Caminho | Conteúdo | Commitar? |
 | --- | --- | --- |
-| `.conclave/` | Cache do mapa de código, histórico de reviews, critérios, feedback de achados | Não, adicione ao `.gitignore` |
+| `.conclave/` | Cache do mapa de código, histórico de reviews, critérios, feedback de achados | Não; ele se ignora automaticamente |
 | `~/.config/conclave/credentials.env` | Configurações e chaves de provider (`0600`) | Nunca |
 | `~/.config/conclave/config.json` | Idioma da interface | — |
 | `.claude/skills/`, `.agents/skills/` | Skill de agente, criada por `conclave setup` | Sim, para compartilhar com o time |

@@ -85,7 +85,8 @@ export async function inspectRepository(path: string): Promise<RepositoryInspect
     successful(root, ["log", "-1", "--pretty=%s"]),
   ]);
   const currentBranch = branchValue === undefined || branchValue === "" ? "HEAD" : branchValue;
-  const entries = (statusResult.code === 0 ? statusResult.stdout : "").split("\0").filter(Boolean);
+  // Conclave's own cache is never part of the change, even before its self-ignore file exists.
+  const entries = (statusResult.code === 0 ? statusResult.stdout : "").split("\0").filter((entry) => entry !== "" && !entry.startsWith("?? .conclave/"));
   return {
     root,
     name: basename(root),

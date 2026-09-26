@@ -1,9 +1,10 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import type { PullRequestSummary } from "../domain/pr-summary.js";
 import type { ReviewHandoff } from "../domain/review-handoff.js";
 import type { ValidationReport } from "../domain/validation.js";
+import { ensureConclaveDirectory } from "./conclave-directory.js";
 
 export interface ReviewHistoryRecord {
   readonly id: string;
@@ -46,7 +47,7 @@ export async function saveReviewHistory(
 ): Promise<void> {
   const destination = historyPath(repositoryRoot);
   const directory = resolve(destination, "..");
-  await mkdir(directory, { recursive: true, mode: 0o700 });
+  await ensureConclaveDirectory(directory);
   const records = [record, ...(await readHistory(repositoryRoot))]
     .filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index)
     .slice(0, HISTORY_LIMIT);

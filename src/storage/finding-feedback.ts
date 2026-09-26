@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { appendFile, lstat, mkdir, readFile, realpath } from "node:fs/promises";
+import { appendFile, lstat, readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { ValidationReport } from "../domain/validation.js";
+import { ensureConclaveDirectory } from "./conclave-directory.js";
 
 export interface FindingFeedback { readonly id: string; readonly reviewId: string; readonly reportDigest: string; readonly fingerprint: string; readonly classification: "confirmed" | "false-positive" | "accepted-risk"; readonly note: string; readonly createdAt: string }
 async function pathFor(root: string): Promise<string> {
   const canonical = await realpath(root); const directory = join(canonical, ".conclave");
-  await mkdir(directory, { recursive: true, mode: 0o700 });
+  await ensureConclaveDirectory(directory);
   if (await realpath(directory) !== directory) throw new Error("Feedback directory must not be a symlink");
   const path = join(directory, "finding-feedback.jsonl");
   const details = await lstat(path).catch((error: unknown) => { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; });

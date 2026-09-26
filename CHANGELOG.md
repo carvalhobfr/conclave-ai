@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.16.1] — 2026-09-26
+
+- Friendlier first run: relative bases such as `--base HEAD~3` work; a repository without commits, a missing base, an unknown command (with a did-you-mean suggestion), and Ask without a provider each explain the next step; "Nothing to review" suggests what to try; and `.conclave/` ignores itself so it never shows up as untracked.
+
 ## [0.16.0] — 2026-09-26
 
 - Less noise, more languages: `conclave check` now prints a short summary (verdict, top three risks with file and line, next action) and `--verbose` keeps the full report; inline `conclave-ignore` comments turn an intentional warning into an auditable note; "exported behavior changed without a test change" becomes a note in repositories with no tests; Python and Java get the empty-handler and unreleased-resource rules.
