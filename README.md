@@ -67,7 +67,7 @@ Other options:
 npm install --save-dev conclave-ai  # per project, then: npx conclave check .
 yarn add --dev conclave-ai          # then: yarn conclave check .
 pnpm add --save-dev conclave-ai     # then: pnpm exec conclave check .
-npx --yes conclave-ai check .       # run once without installing
+npx --yes conclave-ai@latest check .  # run once without installing
 ```
 
 Check the install with `conclave --version` and `conclave doctor .`.
@@ -243,6 +243,7 @@ The verdict comes from deterministic rules with cited evidence, so the same chan
 | The same warning shows up on every review | Silence intentional cases with a `conclave-ignore` comment ([FAQ](#faq)). "Exported behavior changed without a test change" already becomes a note in repositories that have no tests. |
 | Wrong base branch detected | Use `--base <ref>`. Run `git fetch` first if the base is a remote branch. |
 | `conclave: command not found` | Install globally (`npm install -g conclave-ai`) or use `npx conclave`. |
+| `Unknown command: check` or other missing commands | An old global install is answering. Run `conclave --version`, then `npm install -g conclave-ai@latest`. |
 | Ask says a key or model is missing | Run `conclave init`, then `conclave provider-check`. |
 | A setting refuses to change | `conclave config` shows where each value comes from; a shell variable or project `.env` wins over user settings. |
 | Cockpit port already in use | `conclave open . --port 4318` |

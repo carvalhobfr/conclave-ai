@@ -374,10 +374,16 @@ export class GitChangeSetService {
   public async materializeValidationRoot(repositoryRoot: string, source: ChangeSource): Promise<{
     readonly rootPath: string;
     readonly cleanup: () => Promise<void>;
+    /** Temporary directory to remove if the process is interrupted before `cleanup` runs. */
+    readonly temporaryPath?: string;
   }> {
     const ref = archiveHead(source);
     if (ref === undefined) return { rootPath: resolve(repositoryRoot), cleanup: () => Promise.resolve() };
     const materialized = await materializeArchive(repositoryRoot, ref);
-    return { rootPath: materialized.rootPath, cleanup: () => rm(materialized.cleanupPath, { recursive: true, force: true }) };
+    return {
+      rootPath: materialized.rootPath,
+      temporaryPath: materialized.cleanupPath,
+      cleanup: () => rm(materialized.cleanupPath, { recursive: true, force: true }),
+    };
   }
 }

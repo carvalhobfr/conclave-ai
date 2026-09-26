@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,15 @@ const MAX_OUTPUT_BYTES = 10_000_000;
 // The first run indexes the repository; large monorepos need more than two minutes.
 const TIMEOUT_MS = Number(process.env.CONCLAVE_TIMEOUT_MS ?? 300_000);
 const VERDICT_EXIT = { pass: 0, warn: 0, block: 1, inconclusive: 2 };
+// `npm run release:bump` keeps this pin current. Any installed Conclave older than its minor
+// release lacks commands or flags this runner relies on, so it is skipped in favour of npx.
+const PINNED_PACKAGE = "conclave-ai@0.16.5";
+const MINIMUM_VERSION = PINNED_PACKAGE.slice("conclave-ai@".length).split(".").slice(0, 2).map(Number);
+
+function compatible(version) {
+  const [major = 0, minor = 0] = String(version).split(".").map(Number);
+  return major > MINIMUM_VERSION[0] || (major === MINIMUM_VERSION[0] && minor >= MINIMUM_VERSION[1]);
+}
 
 function parseArguments(argv) {
   const parsed = { repository: ".", source: "workspace", receipts: [], newSeries: false };
@@ -59,7 +68,12 @@ async function conclaveEntrypoint(packageRoot) {
   if (!(await executable(entrypoint))) return undefined;
   try {
     const manifest = JSON.parse(await readFile(resolve(packageRoot, "package.json"), "utf8"));
-    return manifest?.name === "conclave-ai" ? entrypoint : undefined;
+    if (manifest?.name !== "conclave-ai") return undefined;
+    if (!compatible(manifest.version)) {
+      process.stderr.write(`Skipping conclave-ai ${String(manifest.version)} at ${packageRoot}: this skill needs ${MINIMUM_VERSION.join(".")} or newer.\n`);
+      return undefined;
+    }
+    return entrypoint;
   } catch {
     return undefined;
   }
@@ -108,11 +122,21 @@ async function resolveCommand(repository) {
   if (installed !== undefined) {
     const shim = await windowsShim(installed);
     if (shim !== undefined) return shim;
-    if (process.platform !== "win32") return { command: installed, prefix: [] };
+    // npm links the global bin to the package's dist/cli.js; checking that package keeps an old
+    // global install from answering with commands this skill does not know.
+    if (process.platform !== "win32") {
+      const linked = await realpath(installed).catch(() => installed);
+      const packageRoot = resolve(dirname(linked), "..");
+      const isPackage = await readFile(resolve(packageRoot, "package.json"), "utf8")
+        .then((text) => JSON.parse(text)?.name === "conclave-ai", () => false);
+      if (!isPackage) return { command: installed, prefix: [] };
+      const entrypoint = await conclaveEntrypoint(packageRoot);
+      if (entrypoint !== undefined) return { command: process.execPath, prefix: [entrypoint] };
+    }
   }
   const npx = join(dirname(process.execPath), "node_modules", "npm", "bin", "npx-cli.js");
   const npxCommand = process.platform === "win32" && await executable(npx) ? { command: process.execPath, prefix: [npx] } : { command: "npx", prefix: [] };
-  return { command: npxCommand.command, prefix: [...npxCommand.prefix, "--yes", "--package=conclave-ai@0.16.4", "conclave"] };
+  return { command: npxCommand.command, prefix: [...npxCommand.prefix, "--yes", `--package=${PINNED_PACKAGE}`, "conclave"] };
 }
 
 function commandArguments(parsed) {

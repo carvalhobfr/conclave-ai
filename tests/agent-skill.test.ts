@@ -92,6 +92,11 @@ describe("runner command resolution", () => {
       await cp(resolve("skills/conclave-validate"), skill, { recursive: true });
       const repository = join(root, "other-project");
       await mkdir(join(repository, "dist"), { recursive: true });
+      // An old project-local Conclave predates commands the skill needs, so it must be skipped too.
+      const stale = join(repository, "node_modules", "conclave-ai");
+      await mkdir(join(stale, "dist"), { recursive: true });
+      await writeFile(join(stale, "package.json"), JSON.stringify({ name: "conclave-ai", version: "0.2.2" }));
+      await writeFile(join(stale, "dist", "cli.js"), `require("node:fs").writeFileSync(${JSON.stringify(join(root, "stale-executed"))}, "x");`);
       await writeFile(join(repository, "package.json"), JSON.stringify({ name: "other-project" }));
       const marker = join(root, "executed");
       await writeFile(join(repository, "dist/cli.js"), `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "x");`);
@@ -122,6 +127,8 @@ describe("runner command resolution", () => {
       expect(result.code, result.stderr).toBe(0);
       expect(JSON.parse(result.stdout)).toEqual(expect.objectContaining({ verdict: "pass" }));
       await expect(access(marker)).rejects.toThrow();
+      await expect(access(join(root, "stale-executed"))).rejects.toThrow();
+      expect(result.stderr).toContain("Skipping conclave-ai 0.2.2");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -67,7 +67,7 @@ Outras opções:
 npm install --save-dev conclave-ai  # por projeto, depois: npx conclave check .
 yarn add --dev conclave-ai          # depois: yarn conclave check .
 pnpm add --save-dev conclave-ai     # depois: pnpm exec conclave check .
-npx --yes conclave-ai check .       # rodar uma vez sem instalar
+npx --yes conclave-ai@latest check .  # rodar uma vez sem instalar
 ```
 
 Confira a instalação com `conclave --version` e `conclave doctor .`.
@@ -243,6 +243,7 @@ O veredito vem de regras determinísticas com evidência citada, então a mesma 
 | O mesmo aviso aparece em todo review | Silencie casos intencionais com um comentário `conclave-ignore` ([perguntas frequentes](#perguntas-frequentes)). "Exported behavior changed without a test change" já vira nota em repositórios sem testes. |
 | Base errada detectada | Use `--base <ref>`. Rode `git fetch` antes se a base for uma branch remota. |
 | `conclave: command not found` | Instale globalmente (`npm install -g conclave-ai`) ou use `npx conclave`. |
+| `Unknown command: check` ou outros comandos faltando | Uma instalação global antiga está respondendo. Rode `conclave --version` e depois `npm install -g conclave-ai@latest`. |
 | Ask diz que falta chave ou modelo | Rode `conclave init` e depois `conclave provider-check`. |
 | Uma configuração não muda | `conclave config` mostra de onde vem cada valor; variável do shell ou `.env` do projeto têm prioridade sobre as configurações do usuário. |
 | Porta do cockpit em uso | `conclave open . --port 4318` |

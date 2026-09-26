@@ -6,7 +6,7 @@ import { loadAttestedEvidence } from "./validation/attested-evidence.js";
 import { loadAcceptanceContract, saveAcceptanceContract } from "./storage/acceptance-contract.js";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -1087,6 +1087,7 @@ async function reviewChanges(args: readonly string[]): Promise<void> {
   const source = selectedChangeSource(parsed);
   const changeSet = await changeService.collect(repositoryRoot, source);
   const materialized = await changeService.materializeValidationRoot(repositoryRoot, source);
+  if (materialized.temporaryPath !== undefined) interruptCleanup.add(materialized.temporaryPath);
   try {
     const indexed = await createDeterministicValidationIndex(materialized.rootPath);
     const report = new SuperValidator().validate(indexed.index, changeSet, contract, {
@@ -1106,6 +1107,7 @@ async function reviewChanges(args: readonly string[]): Promise<void> {
     else if (report.verdict === "inconclusive") process.exitCode = 2;
   } finally {
     await materialized.cleanup();
+    if (materialized.temporaryPath !== undefined) interruptCleanup.delete(materialized.temporaryPath);
   }
 }
 
@@ -1198,6 +1200,7 @@ async function pullRequestSummary(
   const changeSet = await changeService.collect(repositoryRoot, source);
   if (!effectiveParsed.json) progress(copy.indexing, copy.localContext);
   const materialized = await changeService.materializeValidationRoot(repositoryRoot, source);
+  if (materialized.temporaryPath !== undefined) interruptCleanup.add(materialized.temporaryPath);
   try {
     const indexed = await createDeterministicValidationIndex(materialized.rootPath);
     if (!effectiveParsed.json) progress(copy.validating, copy.objectiveImpactClaims);
@@ -1254,6 +1257,7 @@ async function pullRequestSummary(
     else if (report.verdict === "inconclusive") process.exitCode = 2;
   } finally {
     await materialized.cleanup();
+    if (materialized.temporaryPath !== undefined) interruptCleanup.delete(materialized.temporaryPath);
   }
 }
 
@@ -1998,6 +2002,16 @@ function closestCommand(input: string): string | undefined {
     .map((candidate) => ({ candidate, distance: editDistance(normalized, candidate) }))
     .sort((left, right) => left.distance - right.distance)[0];
   return best !== undefined && best.distance <= Math.max(1, Math.floor(normalized.length / 3)) ? best.candidate : undefined;
+}
+
+// Snapshots of other branches live in the system temp folder; an interrupted review would
+// otherwise leave one behind on every Ctrl+C.
+const interruptCleanup = new Set<string>();
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    for (const path of interruptCleanup) rmSync(path, { recursive: true, force: true });
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  });
 }
 
 async function main(): Promise<void> {

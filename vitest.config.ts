@@ -21,6 +21,7 @@ const PROCESS_HEAVY_TESTS = [
 
 export default defineConfig({
   test: {
+    globalSetup: ["tests/setup/temporary-root.ts"],
     coverage: {
       reporter: ["text", "html"],
       // Vitest 4 reports every file matching `include`, imported by a test or not, so a

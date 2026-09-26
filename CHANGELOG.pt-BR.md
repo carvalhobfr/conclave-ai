@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.16.5] — 2026-09-26
+
+- Revisão 7: a skill de agente ignora um Conclave instalado mais antigo que a versão para a qual foi feita (uma instalação global antiga podia responder sem o comando `check`) e usa o pacote npx fixado; o comando avulso do README usa `conclave-ai@latest` pelo mesmo motivo; Ctrl+C durante uma comparação de branches remove o snapshot temporário; gravações do histórico de reviews são serializadas entre processos; a dica da navegação Settings atinge o contraste WCAG AA.
+
 ## [0.16.4] — 2026-09-26
 
 - Correções de Windows e CI: o runner da skill de agente e o `conclave update` não falham mais no Windows, onde npm, npx e um `conclave` global são shims `.cmd` (agora rodam pelos entry points JavaScript); `conclave config edit` abre editores `.cmd`; o cockpit abre Options sozinho quando há critérios salvos; um publish de tag que falhou pode ser repetido com `npm run release:tag`.

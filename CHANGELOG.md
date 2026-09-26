@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.16.5] — 2026-09-26
+
+- Review 7: the agent skill skips an installed Conclave older than the version it was built for (an old global install could answer without the `check` command) and falls back to the pinned npx package; the README's one-off command uses `conclave-ai@latest` for the same reason; Ctrl+C during a branch comparison removes its temporary snapshot; review history saves are serialized across processes; the Settings navigation hint meets WCAG AA contrast.
+
 ## [0.16.4] — 2026-09-26
 
 - Windows and CI fixes: the agent skill runner and `conclave update` no longer fail on Windows, where npm, npx, and a global `conclave` are `.cmd` shims (they now run through their JavaScript entry points); `conclave config edit` opens `.cmd` editors; the cockpit opens Options automatically when saved criteria exist; a failed tag publish can be retried with `npm run release:tag`.
