@@ -13,8 +13,27 @@ if (run("git", ["status", "--porcelain"]) !== "") {
   process.exit(1);
 }
 if (run("git", ["tag", "--list", tag]) !== "") {
-  console.error(`${tag} already exists. Run \`npm run release:bump -- patch "…"\` for a new version.`);
-  process.exit(1);
+  // Re-running after a failed publish (for example before trusted publishing was configured)
+  // should retry that release, not demand a new version.
+  let published = false;
+  try { published = run("npm", ["view", `conclave-ai@${version}`, "version"]) === version; } catch { published = false; }
+  if (published) {
+    console.error(`${tag} is already published. Run \`npm run release:bump -- patch "…"\` for a new version.`);
+    process.exit(1);
+  }
+  // The retry republishes the commit the tag already points at; the tag itself never moves.
+  execFileSync("git", ["push", "origin", tag], { stdio: "inherit" });
+  let runId = "";
+  try {
+    runId = run("gh", ["run", "list", "--workflow", "publish.yml", "--branch", tag, "--limit", "1", "--json", "databaseId", "--jq", ".[0].databaseId // \"\""]);
+  } catch {
+    console.error(`${tag} is not on npm yet. Retry the publish run: gh workflow run publish.yml --ref ${tag}`);
+    process.exit(1);
+  }
+  if (runId === "") execFileSync("gh", ["workflow", "run", "publish.yml", "--ref", tag], { stdio: "inherit" });
+  else execFileSync("gh", ["run", "rerun", runId], { stdio: "inherit" });
+  console.log(`Retrying the publish of ${tag}. Follow it: https://github.com/carvalhobfr/conclave-ai/actions/workflows/publish.yml`);
+  process.exit(0);
 }
 run("git", ["tag", "-a", tag, "-m", `conclave-ai ${version}`]);
 execFileSync("git", ["push", "--follow-tags"], { stdio: "inherit" });
