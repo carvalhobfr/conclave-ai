@@ -10,6 +10,7 @@ import {
   isRetriableNetworkError,
   prefersJsonObject,
   providerCapabilities,
+  reasoningEffort,
   type ProviderCapabilities,
 } from "./provider-capabilities.js";
 
@@ -22,6 +23,7 @@ export interface OpenAiCompatibleProviderOptions {
   readonly allowInsecureHttp?: boolean;
   readonly fetchImplementation?: FetchLike;
   readonly timeoutMs?: number;
+  readonly extraHeaders?: Readonly<Record<string, string>>;
   readonly maxTokensField?: "max_tokens" | "max_completion_tokens";
 }
 
@@ -119,8 +121,10 @@ function redactSecret(message: string, secret: string | undefined): string {
 
 function structuredOutputUnsupported(payload: unknown): boolean {
   const message = errorMessage(payload)?.toLowerCase();
-  return message !== undefined
-    && message.includes("response_format")
+  if (message === undefined) return false;
+  // Some backends compile the schema into a grammar and reject keywords they do not implement.
+  if (message.includes("grammar error") && message.includes("unimplemented")) return true;
+  return message.includes("response_format")
     && (
       message.includes("unavailable")
       || message.includes("unsupported")
@@ -138,6 +142,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
   readonly #apiKey: string | undefined;
   readonly #fetch: FetchLike;
   readonly #timeoutMs: number;
+  readonly #extraHeaders: Readonly<Record<string, string>>;
   readonly #maxTokensField: "max_tokens" | "max_completion_tokens";
   readonly #capabilities: ProviderCapabilities;
   #jsonSchemaUnavailable = false;
@@ -165,6 +170,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     this.#apiKey = options.apiKey;
     this.#fetch = options.fetchImplementation ?? fetch;
     this.#timeoutMs = options.timeoutMs ?? 60_000;
+    this.#extraHeaders = options.extraHeaders ?? {};
     this.#maxTokensField = options.maxTokensField ?? "max_completion_tokens";
     this.#capabilities = providerCapabilities(options.id);
   }
@@ -199,8 +205,9 @@ export class OpenAiCompatibleProvider implements LlmProvider {
             }
           : { type: "json_object" };
     }
-    if (this.#capabilities.disablesReasoningEffort) {
-      body["reasoning_effort"] = "none";
+    const effort = reasoningEffort(this.#capabilities, request.model);
+    if (effort !== undefined) {
+      body["reasoning_effort"] = effort;
     }
 
     const send = async (): Promise<{ readonly response: Response; readonly payload: unknown }> => {
@@ -209,6 +216,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          ...this.#extraHeaders,
           ...(this.#apiKey === undefined ? {} : { authorization: `Bearer ${this.#apiKey}` }),
         },
         body: JSON.stringify(body),
@@ -249,6 +257,14 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     ) {
       this.#jsonSchemaUnavailable = true;
       body["response_format"] = { type: "json_object" };
+      ({ response, payload } = await send());
+    }
+
+    if (
+      !response.ok
+      && this.#capabilities.retriesUpstreamFailure
+      && errorMessage(payload)?.startsWith("Upstream request failed") === true
+    ) {
       ({ response, payload } = await send());
     }
 

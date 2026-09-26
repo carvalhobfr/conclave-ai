@@ -55,7 +55,7 @@ import {
 } from "./evaluation/reasoning-evaluation.js";
 import { FileSystemCodeIndexStore } from "./indexing/file-system-index-store.js";
 import { RepositoryIndexer } from "./indexing/repository-indexer.js";
-import { createProvider } from "./providers/provider-factory.js";
+import { createRoleProviders } from "./providers/provider-factory.js";
 import { diagnoseProvider } from "./providers/provider-diagnostics.js";
 import { ConclaveMcpService } from "./mcp/conclave-mcp-service.js";
 import { runMcpStdio } from "./mcp/server.js";
@@ -447,11 +447,11 @@ async function reasonAboutRepository(args: readonly string[], intent: "ask" | "i
   }
   const runtimeConfig = loadRuntimeConfig();
   const reasoningConfig = loadReasoningConfiguration(runtimeConfig);
-  const provider = createProvider(runtimeConfig, new EnvironmentCredentialSource());
+  const providers = createRoleProviders(runtimeConfig, reasoningConfig.assignments, new EnvironmentCredentialSource());
   const indexed = await updateIndex(requestedPath);
   const retrieval = new CodeRetrievalService(indexed.index, indexed.embeddingProvider);
   const runtime = new StructuredAgentRuntime(
-    new Map([[provider.id, provider]]),
+    providers,
     reasoningConfig.assignments,
     DEFAULT_REASONING_LIMITS,
   );
@@ -515,7 +515,7 @@ async function evaluateReasoning(args: readonly string[]): Promise<void> {
   }
   const runtimeConfig = loadRuntimeConfig();
   const reasoningConfig = loadReasoningConfiguration(runtimeConfig);
-  const provider = createProvider(runtimeConfig, new EnvironmentCredentialSource());
+  const providers = createRoleProviders(runtimeConfig, reasoningConfig.assignments, new EnvironmentCredentialSource());
   const indexed = await updateIndex(requestedPath);
   const retrieval = new CodeRetrievalService(indexed.index, indexed.embeddingProvider);
   const report = await runReasoningEvaluation(
@@ -524,7 +524,7 @@ async function evaluateReasoning(args: readonly string[]): Promise<void> {
       Promise.resolve(new ReasoningEngine({
         retrieval,
         runtime: new StructuredAgentRuntime(
-          new Map([[provider.id, provider]]),
+          providers,
           reasoningConfig.assignments,
           DEFAULT_REASONING_LIMITS,
         ),
@@ -1657,12 +1657,12 @@ async function startMcp(args: readonly string[]): Promise<void> {
     try {
       const runtimeConfig = loadRuntimeConfig();
       const reasoningConfig = loadReasoningConfiguration(runtimeConfig);
-      const provider = createProvider(runtimeConfig, new EnvironmentCredentialSource());
+      const providers = createRoleProviders(runtimeConfig, reasoningConfig.assignments, new EnvironmentCredentialSource());
       return async (retrieval: CodeRetrievalService, repositoryRoot: string) => {
         const changeContext = await inferReasoningChangeContext(repositoryRoot, retrieval);
         return new ReasoningEngine({
           retrieval,
-          runtime: new StructuredAgentRuntime(new Map([[provider.id, provider]]), reasoningConfig.assignments, DEFAULT_REASONING_LIMITS),
+          runtime: new StructuredAgentRuntime(providers, reasoningConfig.assignments, DEFAULT_REASONING_LIMITS),
           preset: reasoningConfig.preset,
           ...(changeContext === undefined ? {} : { changeContext }),
         });

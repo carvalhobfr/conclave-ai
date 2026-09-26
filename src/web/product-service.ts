@@ -17,7 +17,7 @@ import type { ChangeSet, ChangeSource, ValidationReport } from "../domain/valida
 import { LocalHashEmbeddingProvider } from "../embeddings/local-hash-embedding.js";
 import { InMemoryCodeIndexStore } from "../indexing/in-memory-index-store.js";
 import { RepositoryIndexer } from "../indexing/repository-indexer.js";
-import { createProvider } from "../providers/provider-factory.js";
+import { createRoleProviders } from "../providers/provider-factory.js";
 import type { FetchLike } from "../providers/openai-compatible-provider.js";
 import { diagnoseProvider, type ProviderDiagnostics } from "../providers/provider-diagnostics.js";
 import { LocalFolderRepository } from "../repositories/local-folder-repository.js";
@@ -52,6 +52,7 @@ import type {
   ValidationRunView,
   ReviewHistoryView,
 } from "./contracts.js";
+import { REASONING_ROLE_NAMES } from "./contracts.js";
 
 interface ProjectSession {
   readonly id: string;
@@ -463,18 +464,20 @@ export class ConclaveProductService {
       CONCLAVE_BASE_URL: baseUrl,
       CONCLAVE_REASONING_PRESET: input.reasoningPreset,
     };
-    for (const role of ["INVESTIGATOR", "SKEPTIC", "ARCHITECT", "VERIFIER", "JUDGE"] as const) {
-      values[`CONCLAVE_${role}_PROVIDER`] = input.provider;
-      values[`CONCLAVE_${role}_MODEL`] = model;
+    for (const role of REASONING_ROLE_NAMES) {
+      values[`CONCLAVE_${role.toUpperCase()}_PROVIDER`] = input.roles?.[role]?.provider ?? input.provider;
+      values[`CONCLAVE_${role.toUpperCase()}_MODEL`] = input.roles?.[role]?.model.trim() || model;
     }
+    // Always written so switching to a preset without a fallback clears the previous one.
+    values["CONCLAVE_FALLBACK_MODEL"] = input.fallbackModel?.trim() ?? "";
     if (input.mode === "api" && effectiveApiKey !== undefined) values["CONCLAVE_API_KEY"] = effectiveApiKey;
 
     const candidate = { ...this.#environment, ...values };
     let config: RuntimeConfig;
     try {
       config = loadRuntimeConfig(candidate);
-      loadReasoningConfiguration(config, candidate);
-      createProvider(config, new EnvironmentCredentialSource(candidate));
+      const reasoning = loadReasoningConfiguration(config, candidate);
+      createRoleProviders(config, reasoning.assignments, new EnvironmentCredentialSource(candidate));
     } catch (error) {
       throw new ProductServiceError(
         "invalid_runtime_configuration",
@@ -638,11 +641,11 @@ export class ConclaveProductService {
   async #liveReasoning(session: ProjectSession): Promise<ReasoningEngine> {
     const runtime = loadRuntimeConfig(this.#environment);
     const reasoning = loadReasoningConfiguration(runtime, this.#environment);
-    const provider = createProvider(runtime, new EnvironmentCredentialSource(this.#environment));
+    const providers = createRoleProviders(runtime, reasoning.assignments, new EnvironmentCredentialSource(this.#environment));
     const changeContext = await inferReasoningChangeContext(session.root, session.retrieval);
     return new ReasoningEngine({
       retrieval: session.retrieval,
-      runtime: new StructuredAgentRuntime(new Map([[provider.id, provider]]), reasoning.assignments, DEFAULT_REASONING_LIMITS),
+      runtime: new StructuredAgentRuntime(providers, reasoning.assignments, DEFAULT_REASONING_LIMITS),
       preset: reasoning.preset,
       ...(changeContext === undefined ? {} : { changeContext }),
     });

@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { TypeScriptCodeParser } from "../src/code-intelligence/typescript-parser.js";
-import type { Claim, ReasoningRetrievalRequest } from "../src/domain/reasoning.js";
+import type { Challenge, Claim, ReasoningRetrievalRequest } from "../src/domain/reasoning.js";
 import { LocalHashEmbeddingProvider } from "../src/embeddings/local-hash-embedding.js";
 import { InMemoryCodeIndexStore } from "../src/indexing/in-memory-index-store.js";
 import { RepositoryIndexer } from "../src/indexing/repository-indexer.js";
@@ -110,6 +110,29 @@ describe("bounded reasoning retrieval", () => {
 
     expect(verification).toEqual(
       expect.objectContaining({ outcome: "rejected", method: "graph", deterministic: true }),
+    );
+  });
+
+  it("lets a contradictory-evidence challenge reject a claim only with evidence the claim does not cite", async () => {
+    const service = await reasoningFixture();
+    const result = await new FollowUpRetrievalExecutor(service, 10, 3).execute(
+      request("request_challenge", { kind: "text", text: "bootstrapSession" }),
+    );
+    const challenge: Challenge = {
+      id: "challenge_1",
+      claimId: "claim_1",
+      type: "contradictory-evidence",
+      explanation: "Check the cited source again.",
+      retrievalRequestIds: ["request_challenge"],
+      origin: { role: "skeptic", iteration: 1 },
+    };
+    const verifier = new DeterministicClaimVerifier();
+    const citedIds = result.evidence.map((evidence) => evidence.id);
+
+    expect(result.evidence.length).toBeGreaterThan(0);
+    expect(verifier.verifyChallenge(claim(undefined, citedIds), challenge, result, 1)).toBeUndefined();
+    expect(verifier.verifyChallenge(claim(undefined, citedIds.slice(1)), challenge, result, 1)).toEqual(
+      expect.objectContaining({ outcome: "rejected", evidenceIds: citedIds.slice(0, 1) }),
     );
   });
 

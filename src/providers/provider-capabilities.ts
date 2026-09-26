@@ -4,6 +4,8 @@ import type { ProviderId } from "../domain/provider.js";
  * Transport-level quirks of each OpenAI-compatible endpoint, kept in one table instead of
  * scattered checks inside the request builder. Adding a provider means adding a row here.
  */
+export type ReasoningEffort = "none" | "low";
+
 export interface ProviderCapabilities {
   /** Endpoints that reject `temperature` outright rather than clamping it. */
   readonly acceptsTemperature: boolean;
@@ -16,8 +18,15 @@ export interface ProviderCapabilities {
   readonly jsonObjectOnlyModelPrefixes: readonly string[];
   /** Endpoints that default to a reasoning pass Conclave does not want to pay for. */
   readonly disablesReasoningEffort: boolean;
+  /**
+   * Reasoning effort per model-name prefix, first match wins. Unbounded reasoning can consume the
+   * whole output budget and leave an empty answer; some models reject "none" but accept "low".
+   */
+  readonly reasoningEffortByModelPrefix: readonly (readonly [prefix: string, effort: ReasoningEffort])[];
   /** Endpoints observed to drop the first connection of a session. */
   readonly retriesNetworkFailure: boolean;
+  /** Gateways whose upstream intermittently rejects valid requests (e.g. during peak hours). */
+  readonly retriesUpstreamFailure: boolean;
 }
 
 const DEFAULT_CAPABILITIES: ProviderCapabilities = {
@@ -25,7 +34,9 @@ const DEFAULT_CAPABILITIES: ProviderCapabilities = {
   acceptsJsonSchema: false,
   jsonObjectOnlyModelPrefixes: [],
   disablesReasoningEffort: false,
+  reasoningEffortByModelPrefix: [],
   retriesNetworkFailure: false,
+  retriesUpstreamFailure: false,
 };
 
 const OPENCODE_CAPABILITIES: ProviderCapabilities = {
@@ -33,7 +44,17 @@ const OPENCODE_CAPABILITIES: ProviderCapabilities = {
   acceptsJsonSchema: true,
   jsonObjectOnlyModelPrefixes: ["deepseek-"],
   disablesReasoningEffort: false,
+  // Probed on OpenCode Go (2026-09-25): each accepts the listed effort and returns valid JSON.
+  reasoningEffortByModelPrefix: [
+    ["glm-5.3-flash", "low"],
+    ["space-bunny", "low"],
+    ["deepseek-", "none"],
+    ["mimo-", "none"],
+    ["qwen3.", "none"],
+    ["hy3", "none"],
+  ],
   retriesNetworkFailure: true,
+  retriesUpstreamFailure: true,
 };
 
 const CAPABILITIES: Partial<Readonly<Record<ProviderId, ProviderCapabilities>>> = {
@@ -48,6 +69,11 @@ const CAPABILITIES: Partial<Readonly<Record<ProviderId, ProviderCapabilities>>> 
 
 export function providerCapabilities(provider: ProviderId): ProviderCapabilities {
   return CAPABILITIES[provider] ?? DEFAULT_CAPABILITIES;
+}
+
+export function reasoningEffort(capabilities: ProviderCapabilities, model: string): ReasoningEffort | undefined {
+  if (capabilities.disablesReasoningEffort) return "none";
+  return capabilities.reasoningEffortByModelPrefix.find(([prefix]) => model.startsWith(prefix))?.[1];
 }
 
 export function prefersJsonObject(capabilities: ProviderCapabilities, model: string): boolean {

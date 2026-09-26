@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.14.1] — 2026-09-26
+
+- Mix de modelos por papel com modelo de fallback, provider judge SystemOne opcional, OpenCode Go como padrão recomendado de baixo custo e um product lab reproduzível para medir custo e qualidade das reviews.
+
 ## [0.14.0] — 2026-09-21
 
 - Cockpit mais calmo para escolher configurações de review salvas: presets objetivos, favoritos, padrão e troca rápida. A pessoa pode salvar uma cópia local da configuração sem expor ou reter credenciais do provedor no preset.

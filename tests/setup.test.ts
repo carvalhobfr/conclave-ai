@@ -11,12 +11,11 @@ import { providerProfiles } from "../src/config/provider-profiles.js";
 import { createSetupConfiguration } from "../src/config/setup.js";
 
 describe("guided setup", () => {
-  it("offers four maintained starting profiles for every hosted provider", () => {
+  it("offers maintained starting profiles for every hosted provider", () => {
     expect(providerProfiles("openai")).toHaveLength(4);
     expect(providerProfiles("openrouter")).toHaveLength(4);
     expect(providerProfiles("anthropic")).toHaveLength(4);
-    expect(providerProfiles("opencode-go")).toHaveLength(4);
-    expect(providerProfiles("opencode-go")[0]?.model).toBe("deepseek-v4-flash");
+    expect(providerProfiles("opencode-go").map((profile) => profile.model)).toEqual(["deepseek-v4.1-flash", "space-bunny-free"]);
   });
 
   it("builds API-mode configuration without changing deterministic validation", () => {

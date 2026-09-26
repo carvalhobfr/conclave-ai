@@ -127,13 +127,13 @@ const DEFAULT_CONFIGURATION_PROFILE: ConfigurationProfile = { id: "ollama", labe
 const CONFIGURATION_PROFILES: readonly ConfigurationProfile[] = [
   DEFAULT_CONFIGURATION_PROFILE,
   { id: "lm-studio", label: "LM Studio · local", mode: "local", provider: "lm-studio", baseUrl: "http://127.0.0.1:1234/v1", model: "local-model", reasoningPreset: "local", models: [] },
-  { id: "opencode-go", label: "OpenCode Go", mode: "api", provider: "opencode-go", baseUrl: "https://opencode.ai/zen/go/v1", model: "", reasoningPreset: "free-like", models: ["kimi-k2.7-code", "kimi-k2.6", "deepseek-v4-flash", "deepseek-v4-pro", "glm-5.2", "glm-5.1", "minimax-m3", "minimax-m2.7", "mimo-v2.5", "mimo-v2.5-pro", "grok-4.5"] },
-  { id: "opencode-zen", label: "OpenCode Zen", mode: "api", provider: "opencode-zen", baseUrl: "https://opencode.ai/zen/v1", model: "", reasoningPreset: "free-like", models: ["deepseek-v4-flash-free", "mimo-v2.5-free", "north-mini-code-free", "nemotron-3-ultra-free", "kimi-k2.7-code", "deepseek-v4-flash", "glm-5.2", "big-pickle"] },
+  { id: "opencode-go", label: "OpenCode Go", mode: "api", provider: "opencode-go", baseUrl: "https://opencode.ai/zen/go/v1", model: "deepseek-v4.1-flash", reasoningPreset: "full", models: ["deepseek-v4.1-flash", "deepseek-v4-pro", "qwen3.8-max", "space-bunny-free", "qwen3.8-flash", "mimo-v2.6-flash", "kimi-k2.7-code", "glm-5.3"] },
+  { id: "opencode-zen", label: "OpenCode Zen", mode: "api", provider: "opencode-zen", baseUrl: "https://opencode.ai/zen/v1", model: "", reasoningPreset: "free-like", models: ["kimi-k2.7-code", "deepseek-v4-flash", "glm-5.2"] },
   { id: "openrouter", label: "OpenRouter", mode: "api", provider: "openrouter", baseUrl: "https://openrouter.ai/api/v1", model: "", reasoningPreset: "free-like", models: [] },
   { id: "custom", label: "Custom OpenAI-compatible", mode: "api", provider: "openai-compatible", baseUrl: "https://provider.example/v1", model: "", reasoningPreset: "free-like", models: [] },
 ];
 
-type ConclaveCost = "Low" | "Moderate" | "Premium";
+type ConclaveCost = "Free" | "Low" | "Moderate" | "Premium";
 
 interface SavedConclave {
   readonly id: string;
@@ -144,6 +144,10 @@ interface SavedConclave {
   readonly model: string;
   readonly baseUrl: string;
   readonly reasoningPreset: RuntimeConfigurationRequest["reasoningPreset"];
+  readonly roles?: RuntimeConfigurationRequest["roles"];
+  readonly fallbackModel?: string;
+  /** Measured average in the product lab, shown next to the cost tier. */
+  readonly usdPerReview?: number;
   readonly builtIn?: boolean;
 }
 
@@ -156,9 +160,8 @@ interface ConclaveLibrary {
 
 const CONCLAVE_LIBRARY_KEY = "conclave.councils.v1";
 const CONCLAVE_PRESETS: readonly SavedConclave[] = [
-  { id: "essential", name: "Essential", description: "Fast, evidence-first reviews for everyday changes.", cost: "Low", profileId: "opencode-go", model: "deepseek-v4-flash", baseUrl: "https://opencode.ai/zen/go/v1", reasoningPreset: "free-like", builtIn: true },
-  { id: "balanced", name: "Balanced", description: "More time for complex changes without using a premium model.", cost: "Moderate", profileId: "opencode-go", model: "kimi-k2.7-code", baseUrl: "https://opencode.ai/zen/go/v1", reasoningPreset: "full", builtIn: true },
-  { id: "deep-review", name: "Deep review", description: "For the changes that deserve a second, more deliberate look.", cost: "Premium", profileId: "custom", model: "gpt-6-astra", baseUrl: "https://api.openai.com/v1", reasoningPreset: "full", builtIn: true },
+  { id: "essential", name: "Essential", description: "Recommended. The best measured cost-benefit for everyday reviews.", cost: "Low", profileId: "opencode-go", model: "deepseek-v4.1-flash", baseUrl: "https://opencode.ai/zen/go/v1", reasoningPreset: "full", usdPerReview: 0.0015, builtIn: true },
+  { id: "free-trial", name: "Free trial", description: "No cost while OpenCode offers this preview model; it may be withdrawn.", cost: "Free", profileId: "opencode-go", model: "space-bunny-free", baseUrl: "https://opencode.ai/zen/go/v1", reasoningPreset: "full", builtIn: true },
 ];
 
 function allConclaves(library: ConclaveLibrary): readonly SavedConclave[] {
@@ -169,9 +172,11 @@ function isSavedConclave(value: unknown): value is SavedConclave {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
   return typeof item["id"] === "string" && typeof item["name"] === "string" && typeof item["description"] === "string"
-    && (item["cost"] === "Low" || item["cost"] === "Moderate" || item["cost"] === "Premium")
+    && (item["cost"] === "Free" || item["cost"] === "Low" || item["cost"] === "Moderate" || item["cost"] === "Premium")
     && typeof item["profileId"] === "string" && typeof item["model"] === "string" && typeof item["baseUrl"] === "string"
-    && (item["reasoningPreset"] === "free-like" || item["reasoningPreset"] === "full" || item["reasoningPreset"] === "local");
+    && (item["reasoningPreset"] === "free-like" || item["reasoningPreset"] === "full" || item["reasoningPreset"] === "local")
+    && (item["fallbackModel"] === undefined || typeof item["fallbackModel"] === "string")
+    && (item["roles"] === undefined || (typeof item["roles"] === "object" && item["roles"] !== null && !Array.isArray(item["roles"])));
 }
 
 function loadConclaveLibrary(): ConclaveLibrary {
@@ -183,7 +188,11 @@ function loadConclaveLibrary(): ConclaveLibrary {
     if (typeof value !== "object" || value === null || Array.isArray(value)) return fallback;
     const record = value as Record<string, unknown>;
     if (typeof record["activeId"] !== "string" || typeof record["defaultId"] !== "string" || !Array.isArray(record["favoriteIds"]) || !Array.isArray(record["custom"])) return fallback;
-    return { activeId: record["activeId"], defaultId: record["defaultId"], favoriteIds: record["favoriteIds"].filter((id): id is string => typeof id === "string"), custom: record["custom"].filter(isSavedConclave) };
+    const custom = record["custom"].filter(isSavedConclave);
+    // Saved ids can point at presets that were retired; fall back to the recommended one.
+    const known = new Set([...CONCLAVE_PRESETS, ...custom].map((item) => item.id));
+    const valid = (id: string) => (known.has(id) ? id : fallback.activeId);
+    return { activeId: valid(record["activeId"]), defaultId: valid(record["defaultId"]), favoriteIds: record["favoriteIds"].filter((id): id is string => typeof id === "string" && known.has(id)), custom };
   } catch { return fallback; }
 }
 
@@ -203,7 +212,7 @@ function ConclaveCards({ library, onSelect, onDefault, onFavorite, onCreate }: {
       const active = conclave.id === library.activeId;
       const favorite = library.favoriteIds.includes(conclave.id);
       return <article className={`conclave-card ${active ? "active" : ""}`} key={conclave.id}>
-        <button type="button" className="conclave-card-main" onClick={() => onSelect(conclave.id)} aria-label={`Use ${conclave.name}`} aria-pressed={active}><div><strong>{conclave.name}</strong>{conclave.id === library.defaultId && <span className="default-tag">Default</span>}</div><p>{conclave.description}</p><small>{conclave.cost} estimated cost</small></button>
+        <button type="button" className="conclave-card-main" onClick={() => onSelect(conclave.id)} aria-label={`Use ${conclave.name}`} aria-pressed={active}><div><strong>{conclave.name}</strong>{conclave.id === library.defaultId && <span className="default-tag">Default</span>}</div><p>{conclave.description}</p><small>{conclave.cost === "Free" ? "No cost" : `${conclave.cost} estimated cost`}{conclave.usdPerReview === undefined || conclave.cost === "Free" ? "" : ` · ≈ $${conclave.usdPerReview.toFixed(4)} per review`}</small></button>
         <footer><button type="button" className={favorite ? "star active" : "star"} aria-label={`${favorite ? "Remove" : "Add"} ${conclave.name} favorite`} onClick={() => onFavorite(conclave.id)}>{favorite ? "★" : "☆"}</button><button type="button" className="text-action" aria-label={`Make ${conclave.name} default`} onClick={() => onDefault(conclave.id)} disabled={conclave.id === library.defaultId}>Make default</button></footer>
       </article>;
     })}</div>
@@ -224,6 +233,9 @@ function ConfigurationPanel({ runtime, onRuntime, library, onSelectConclave, onD
   const [model, setModel] = useState(runtime?.model ?? initial.model);
   const [baseUrl, setBaseUrl] = useState(runtime?.baseUrl ?? initial.baseUrl);
   const [reasoningPreset, setReasoningPreset] = useState<RuntimeConfigurationRequest["reasoningPreset"]>(runtime?.reasoningPreset ?? initial.reasoningPreset);
+  // Role mix and fallback come only from a selected Conclave; editing the model by hand clears them.
+  const [mix, setMix] = useState<Pick<RuntimeConfigurationRequest, "roles" | "fallbackModel">>({});
+  const chooseModel = (value: string) => { setModel(value); setMix({}); };
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -245,6 +257,7 @@ function ConfigurationPanel({ runtime, onRuntime, library, onSelectConclave, onD
     setModel(next.model);
     setBaseUrl(next.baseUrl);
     setReasoningPreset(next.reasoningPreset);
+    setMix({ ...(next.roles === undefined ? {} : { roles: next.roles }), ...(next.fallbackModel === undefined ? {} : { fallbackModel: next.fallbackModel }) });
     setApiKey("");
     setAvailableModels([]);
     setResult(undefined);
@@ -255,7 +268,7 @@ function ConfigurationPanel({ runtime, onRuntime, library, onSelectConclave, onD
   const chooseProfile = (id: ConfigurationProfileId) => {
     const next = CONFIGURATION_PROFILES.find((item) => item.id === id) ?? DEFAULT_CONFIGURATION_PROFILE;
     setProfileId(next.id);
-    setModel(next.model);
+    chooseModel(next.model);
     setBaseUrl(next.baseUrl);
     setReasoningPreset(next.reasoningPreset);
     setApiKey("");
@@ -275,7 +288,7 @@ function ConfigurationPanel({ runtime, onRuntime, library, onSelectConclave, onD
         ...(profile.mode === "api" && apiKey !== "" ? { apiKey } : {}),
       });
       setAvailableModels(discovered.models);
-      if (!discovered.models.includes(model)) setModel("");
+      if (!discovered.models.includes(model)) chooseModel("");
     } catch (discoveryError) {
       setError(discoveryError instanceof Error ? discoveryError.message : "Could not load provider models.");
     } finally {
@@ -294,6 +307,7 @@ function ConfigurationPanel({ runtime, onRuntime, library, onSelectConclave, onD
         baseUrl,
         reasoningPreset,
         ...(profile.mode === "api" && apiKey !== "" ? { apiKey } : {}),
+        ...mix,
       });
       setApiKey("");
       setResult(next);
@@ -313,8 +327,8 @@ function ConfigurationPanel({ runtime, onRuntime, library, onSelectConclave, onD
       <select id="provider-profile" value={profileId} onChange={(event) => chooseProfile(event.target.value as ConfigurationProfileId)}>{CONFIGURATION_PROFILES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
       <label htmlFor="provider-model">Model</label>
       <div className="model-field">{availableModels.length > 0
-        ? <select id="provider-model" value={model} onChange={(event) => setModel(event.target.value)}><option value="">Choose an available model</option>{availableModels.map((item) => <option value={item} key={item}>{item}</option>)}</select>
-        : <input id="provider-model" list="provider-models" value={model} onChange={(event) => setModel(event.target.value)} placeholder="Load models or enter an ID" autoComplete="off" />}
+        ? <select id="provider-model" value={model} onChange={(event) => chooseModel(event.target.value)}><option value="">Choose an available model</option>{availableModels.map((item) => <option value={item} key={item}>{item}</option>)}</select>
+        : <input id="provider-model" list="provider-models" value={model} onChange={(event) => chooseModel(event.target.value)} placeholder="Load models or enter an ID" autoComplete="off" />}
         <button type="button" onClick={() => void discoverModels()} disabled={loadingModels}>{loadingModels ? "Loading…" : "Load available models"}</button></div>
       <datalist id="provider-models">{profile.models.map((item) => <option value={item} key={item} />)}</datalist>
       <label htmlFor="provider-endpoint">Endpoint</label>

@@ -5,8 +5,9 @@ import { ProviderError } from "../src/domain/provider.js";
 import { FakeProvider } from "../src/providers/fake-provider.js";
 import { AnthropicProvider } from "../src/providers/anthropic-provider.js";
 import { OpenAiCompatibleProvider } from "../src/providers/openai-compatible-provider.js";
-import { createProvider } from "../src/providers/provider-factory.js";
+import { createProvider, createRoleProviders } from "../src/providers/provider-factory.js";
 import { diagnoseProvider } from "../src/providers/provider-diagnostics.js";
+import { parseJudgeOutput } from "../src/reasoning/structured-outputs.js";
 import { EnvironmentCredentialSource } from "../src/storage/environment-credential-source.js";
 
 describe("providers", () => {
@@ -21,6 +22,111 @@ describe("providers", () => {
       provider.generate({ model: "test", messages: [{ role: "user", content: "question" }] }),
     ).resolves.toEqual(expect.objectContaining({ text: "structured fake" }));
     expect(provider.requests).toHaveLength(1);
+  });
+
+  it("retries an OpenCode upstream rejection once but not other errors", async () => {
+    const replies = [
+      { status: 400, body: { error: { message: "Upstream request failed: Invalid request parameters." } } },
+      { status: 200, body: { model: "m", choices: [{ message: { content: "ok" }, finish_reason: "stop" }] } },
+      { status: 400, body: { error: { message: "Invalid model" } } },
+    ];
+    const fetchImplementation = vi.fn(() => {
+      const reply = replies.shift();
+      if (reply === undefined) throw new Error("unexpected request");
+      return Promise.resolve(new Response(JSON.stringify(reply.body), { status: reply.status, headers: { "content-type": "application/json" } }));
+    });
+    const environment = { CONCLAVE_MODE: "api", CONCLAVE_PROVIDER: "opencode-go", CONCLAVE_MODEL: "m", CONCLAVE_API_KEY: "k" };
+    const provider = createProvider(loadRuntimeConfig(environment), new EnvironmentCredentialSource(environment), { fetchImplementation });
+    await expect(provider.generate({ model: "m", messages: [{ role: "user", content: "hi" }] })).resolves.toHaveProperty("text", "ok");
+    await expect(provider.generate({ model: "m", messages: [{ role: "user", content: "hi" }] })).rejects.toThrow("Invalid model");
+    expect(fetchImplementation).toHaveBeenCalledTimes(3);
+  });
+
+  it("builds one provider per role provider only within the same vendor credential", () => {
+    const environment = { CONCLAVE_MODE: "api", CONCLAVE_PROVIDER: "opencode-go", CONCLAVE_MODEL: "m", CONCLAVE_API_KEY: "k" };
+    const config = loadRuntimeConfig(environment);
+    const credentials = new EnvironmentCredentialSource(environment);
+    const providers = createRoleProviders(config, [{ providerId: "opencode-go" }, { providerId: "opencode-zen" }], credentials);
+    expect([...providers.keys()]).toEqual(["opencode-go", "opencode-zen"]);
+    expect(() => createRoleProviders(config, [{ providerId: "openrouter" }], credentials)).toThrow(/same vendor credential/);
+  });
+
+  it("sends a dedicated provider key only to that role provider", async () => {
+    const seen: Record<string, string> = {};
+    const fetchImplementation = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      seen[input instanceof Request ? input.url : input.toString()] = (init?.headers as Record<string, string>)["authorization"] ?? "";
+      return Promise.resolve(new Response(JSON.stringify({ model: "m", choices: [{ message: { content: "ok" }, finish_reason: "stop" }] }), { status: 200 }));
+    });
+    const environment = { CONCLAVE_MODE: "api", CONCLAVE_PROVIDER: "opencode-go", CONCLAVE_MODEL: "m", CONCLAVE_API_KEY: "go-key", CONCLAVE_OPENCODE_ZEN_API_KEY: "zen-key" };
+    const providers = createRoleProviders(loadRuntimeConfig(environment), [{ providerId: "opencode-zen" }], new EnvironmentCredentialSource(environment), { fetchImplementation });
+    for (const provider of providers.values()) await provider.generate({ model: "m", messages: [{ role: "user", content: "hi" }] });
+    expect(seen).toEqual({
+      "https://opencode.ai/zen/go/v1/chat/completions": "Bearer go-key",
+      "https://opencode.ai/zen/v1/chat/completions": "Bearer zen-key",
+    });
+  });
+
+  it("routes Jev on OpenCode Zen to System One and returns the judge contract", async () => {
+    const requests: { url: string; body: Record<string, unknown> }[] = [];
+    const fetchImplementation = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      requests.push({ url: input instanceof Request ? input.url : input.toString(), body: JSON.parse(typeof init?.body === "string" ? init.body : "{}") as Record<string, unknown> });
+      return Promise.resolve(new Response(JSON.stringify({
+        model: "jev-1.13",
+        answers: { claim_1: { type: "choice", choice: "rejected", confidence: 0.97, probabilities: { rejected: 0.98 } } },
+        usage: { input_tokens: 400, output_tokens: 60 },
+      }), { status: 200 }));
+    });
+    const environment = { CONCLAVE_MODE: "api", CONCLAVE_PROVIDER: "opencode-zen", CONCLAVE_MODEL: "jev-1.13", CONCLAVE_API_KEY: "zen-key" };
+    const provider = createProvider(loadRuntimeConfig(environment), new EnvironmentCredentialSource(environment), { fetchImplementation });
+    const record = JSON.stringify({ question: "q", claims: [{ id: "claim_1", statement: "cleanup leaks the listener" }] });
+    const response = await provider.generate({ model: "jev-1.13", messages: [{ role: "user", content: `BEGIN TRUSTED ADJUDICATION RECORD\n${record}\nEND TRUSTED ADJUDICATION RECORD` }] });
+
+    expect(requests[0]?.url).toBe("https://opencode.ai/zen/v1/systemone");
+    expect(requests[0]?.body).toMatchObject({ model: "jev-1.13", questions: { claim_1: { type: "choice" } } });
+    expect(parseJudgeOutput(response.text, new Set(["claim_1"])).decisions).toEqual([
+      expect.objectContaining({ claimId: "claim_1", status: "rejected" }),
+    ]);
+    expect(response.usage).toEqual({ inputTokens: 400, outputTokens: 60 });
+    await expect(provider.generate({ model: "jev-1.13", messages: [{ role: "user", content: "investigate this" }] })).rejects.toThrow(/judge role/);
+  });
+
+  it("sends each OpenCode model the reasoning effort it accepts", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const fetchImplementation = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(typeof init?.body === "string" ? init.body : "{}") as Record<string, unknown>);
+      return Promise.resolve(
+        new Response(JSON.stringify({ model: "m", choices: [{ message: { content: "ok" }, finish_reason: "stop" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    });
+    for (const model of ["deepseek-v4.1-flash", "space-bunny-free", "kimi-k2.7-code"]) {
+      const environment = { CONCLAVE_MODE: "api", CONCLAVE_PROVIDER: "opencode-go", CONCLAVE_MODEL: model, CONCLAVE_API_KEY: "k" };
+      const instance = createProvider(loadRuntimeConfig(environment), new EnvironmentCredentialSource(environment), { fetchImplementation });
+      await instance.generate({ model, messages: [{ role: "user", content: "hi" }] });
+    }
+    expect(bodies.map((body) => body["reasoning_effort"])).toEqual(["none", "low", undefined]);
+  });
+
+  it("sends a routing session header only to OpenCode Go", async () => {
+    const seen: (HeadersInit | undefined)[] = [];
+    const fetchImplementation = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+      seen.push(init?.headers);
+      return Promise.resolve(
+        new Response(JSON.stringify({ model: "m", choices: [{ message: { content: "ok" }, finish_reason: "stop" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    });
+    for (const provider of ["opencode-go", "openai"]) {
+      const environment = { CONCLAVE_MODE: "api", CONCLAVE_PROVIDER: provider, CONCLAVE_MODEL: "m", CONCLAVE_API_KEY: "k" };
+      const instance = createProvider(loadRuntimeConfig(environment), new EnvironmentCredentialSource(environment), { fetchImplementation });
+      await instance.generate({ model: "m", messages: [{ role: "user", content: "hi" }] });
+    }
+    expect(seen[0]).toHaveProperty(["x-opencode-session"]);
+    expect(seen[1]).not.toHaveProperty("x-opencode-session");
   });
 
   it("calls the OpenAI-compatible chat completions contract and normalizes usage", async () => {
@@ -208,7 +314,10 @@ describe("providers", () => {
     expect(requestBodies[2]).toMatchObject({ response_format: { type: "json_object" } });
   });
 
-  it("falls back when an OpenCode upstream rejects supported JSON Schema keywords", async () => {
+  it.each([
+    "InternalError.Algo.InvalidParameter: Format error: 'response_format.json_schema.schema' rejects uniqueItems",
+    'Upstream request failed: [invalid_request_error] Grammar error: Unimplemented keys: ["uniqueItems"]',
+  ])("falls back when an OpenCode upstream rejects supported JSON Schema keywords: %s", async (rejection) => {
     const requestBodies: Record<string, unknown>[] = [];
     const fetchImplementation = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
       if (typeof init?.body !== "string") throw new Error("Expected a JSON request body");
@@ -216,9 +325,7 @@ describe("providers", () => {
       requestBodies.push(body);
       if (requestBodies.length === 1) {
         return Promise.resolve(new Response(JSON.stringify({
-          error: {
-            message: "InternalError.Algo.InvalidParameter: Format error: 'response_format.json_schema.schema' rejects uniqueItems",
-          },
+          error: { message: rejection },
         }), { status: 400 }));
       }
       return Promise.resolve(new Response(JSON.stringify({

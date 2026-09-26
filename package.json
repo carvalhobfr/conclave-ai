@@ -1,6 +1,6 @@
 {
   "name": "conclave-ai",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "description": "Graph-aware independent validator for code changes and agent claims",
   "keywords": [
     "ai",
@@ -76,7 +76,8 @@
     "eval:precision": "vitest run tests/escalation.test.ts tests/source-defects.test.ts tests/pr-summary.test.ts --maxWorkers=1",
     "test:browser": "node scripts/test-browser.mjs",
     "eval:package": "node scripts/evaluate-package.mjs",
-    "eval:product": "node scripts/evaluate-product.mjs"
+    "eval:product": "node scripts/evaluate-product.mjs",
+    "release:bump": "node scripts/bump-version.mjs"
   },
   "dependencies": {
     "ignore": "7.0.6",

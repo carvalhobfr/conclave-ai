@@ -443,9 +443,15 @@ export class ReasoningEngine {
         const verification = verifier.verifyCheck(claim, result, iteration);
         if (verification !== undefined) verifications.push(verification);
       }
+      // A claim whose own deterministic check passed is not overturned by a challenge's retrieval.
+      const checkSupported = new Set(
+        verifications
+          .filter((verification) => verification.iteration === iteration && verification.deterministic && verification.outcome === "supported")
+          .map((verification) => verification.claimId),
+      );
       for (const challenge of challenges) {
         const claim = claims.find((item) => item.id === challenge.claimId);
-        if (claim === undefined) continue;
+        if (claim === undefined || checkSupported.has(claim.id)) continue;
         for (const requestId of challenge.retrievalRequestIds) {
           const result = resultByRequestId.get(requestId);
           if (result === undefined) continue;

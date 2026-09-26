@@ -135,11 +135,24 @@ function expectation(value: unknown): "present" | "absent" {
   return enumValue(value, EXPECTATIONS, "Claim check expectation");
 }
 
+const CHECK_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  "symbol-exists": ["kind", "symbol", "expectation"],
+  references: ["kind", "symbol", "expectation"],
+  callers: ["kind", "symbol", "expectation"],
+  callees: ["kind", "symbol", "expectation"],
+  path: ["kind", "from", "to", "maxDepth", "expectation"],
+  text: ["kind", "text", "expectation"],
+};
+
 function parseClaimCheck(value: unknown): ClaimCheck | undefined {
   if (value === undefined) return undefined;
   if (!isRecord(value) || typeof value["kind"] !== "string") {
     throw new StructuredOutputError("Claim check must be an object");
   }
+  // A check carrying fields we cannot honor (e.g. a "path" scope on a text search) would be verified
+  // differently than the model intended; drop the check and let the claim go to model verification.
+  const allowed = CHECK_FIELDS[value["kind"]];
+  if (allowed !== undefined && Object.keys(value).some((key) => !allowed.includes(key))) return undefined;
   switch (value["kind"]) {
     case "symbol-exists":
       assertKeys(value, ["kind", "symbol", "expectation"], "Symbol check");
@@ -186,22 +199,34 @@ function parseClaimCheck(value: unknown): ClaimCheck | undefined {
   }
 }
 
-export function parseRetrievalRequest(value: unknown): RetrievalRequest {
-  if (!isRecord(value) || typeof value["kind"] !== "string" || !REQUEST_KINDS.has(value["kind"])) {
+const REQUEST_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  symbol: ["kind", "name"],
+  references: ["kind", "symbol"],
+  callers: ["kind", "symbol"],
+  callees: ["kind", "symbol"],
+  path: ["kind", "from", "to", "maxDepth"],
+  text: ["kind", "text"],
+  search: ["kind", "query"],
+};
+
+export function parseRetrievalRequest(input: unknown): RetrievalRequest {
+  if (!isRecord(input) || typeof input["kind"] !== "string" || !REQUEST_KINDS.has(input["kind"])) {
     throw new StructuredOutputError("Retrieval request kind is invalid");
   }
+  // Models without schema enforcement add fields such as a claim check's "expectation" or a "path"
+  // scope. Retrieval is read-only and its results are evidence-gated, so extra fields are dropped
+  // instead of failing the whole role.
+  const allowed = REQUEST_FIELDS[input["kind"]] ?? [];
+  const value = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
   switch (value["kind"]) {
     case "symbol":
-      assertKeys(value, ["kind", "name"], "Symbol request");
       return { kind: "symbol", name: text(value["name"], "Symbol name", 300) };
     case "references":
     case "callers":
     case "callees": {
-      assertKeys(value, ["kind", "symbol"], "Graph request");
       return { kind: value["kind"], symbol: text(value["symbol"], "Graph symbol", 300) };
     }
     case "path": {
-      assertKeys(value, ["kind", "from", "to", "maxDepth"], "Path request");
       const maxDepth = value["maxDepth"];
       if (maxDepth !== undefined && (!Number.isInteger(maxDepth) || (maxDepth as number) < 1 || (maxDepth as number) > 10)) {
         throw new StructuredOutputError("Path maxDepth must be an integer between 1 and 10");
@@ -214,10 +239,8 @@ export function parseRetrievalRequest(value: unknown): RetrievalRequest {
       };
     }
     case "text":
-      assertKeys(value, ["kind", "text"], "Text request");
       return { kind: "text", text: text(value["text"], "Exact text", 1_000) };
     case "search":
-      assertKeys(value, ["kind", "query"], "Search request");
       return { kind: "search", query: text(value["query"], "Search query", 1_000) };
     default:
       throw new StructuredOutputError("Retrieval request kind is invalid");
@@ -225,6 +248,8 @@ export function parseRetrievalRequest(value: unknown): RetrievalRequest {
 }
 
 function requests(value: unknown): readonly RetrievalRequest[] {
+  // Optional follow-up: an omitted or null list means no further retrieval is needed.
+  if (value === undefined || value === null) return [];
   return array(value, "retrievalRequests", 10).map(parseRetrievalRequest);
 }
 

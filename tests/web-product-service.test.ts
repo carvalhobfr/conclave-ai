@@ -96,6 +96,31 @@ describe("ConclaveProductService", () => {
       expect(contents).toContain('CONCLAVE_PROVIDER="opencode-go"');
       expect(contents).toContain('CONCLAVE_MODEL="kimi-k2.7-code"');
       expect(diagnose).toHaveBeenCalledOnce();
+
+      const mixed = await product.configureRuntime({
+        mode: "api",
+        provider: "opencode-go",
+        model: "deepseek-v4.1-flash",
+        baseUrl: "https://opencode.ai/zen/go/v1",
+        reasoningPreset: "full",
+        roles: { judge: { provider: "opencode-zen", model: "jev-1.13" } },
+        fallbackModel: "hy3",
+      });
+      expect(mixed.runtime.roles).toEqual(expect.arrayContaining([
+        expect.objectContaining({ role: "judge", provider: "opencode-zen", model: "jev-1.13" }),
+        expect.objectContaining({ role: "investigator", provider: "opencode-go", model: "deepseek-v4.1-flash" }),
+      ]));
+      const mixedContents = await readFile(join(root, ".env"), "utf8");
+      expect(mixedContents).toContain('CONCLAVE_JUDGE_PROVIDER="opencode-zen"');
+      expect(mixedContents).toContain('CONCLAVE_FALLBACK_MODEL="hy3"');
+      await expect(product.configureRuntime({
+        mode: "api",
+        provider: "opencode-go",
+        model: "deepseek-v4.1-flash",
+        baseUrl: "https://opencode.ai/zen/go/v1",
+        reasoningPreset: "full",
+        roles: { judge: { provider: "openrouter", model: "x" } },
+      })).rejects.toThrow(/same vendor credential/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

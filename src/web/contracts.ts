@@ -137,6 +137,15 @@ export interface RuntimeModeView {
 
 export type ConfigurableProviderId = Exclude<ProviderId, "fake" | "gemini">;
 
+export const REASONING_ROLE_NAMES = ["investigator", "skeptic", "architect", "verifier", "judge"] as const;
+export type ReasoningRoleName = (typeof REASONING_ROLE_NAMES)[number];
+
+export interface RoleModelChoice {
+  /** Defaults to the request provider; must share its vendor credential. */
+  readonly provider?: ConfigurableProviderId;
+  readonly model: string;
+}
+
 export interface RuntimeConfigurationRequest {
   readonly mode: "api" | "local";
   readonly provider: ConfigurableProviderId;
@@ -144,6 +153,10 @@ export interface RuntimeConfigurationRequest {
   readonly baseUrl: string;
   readonly reasoningPreset: "free-like" | "full" | "local";
   readonly apiKey?: string;
+  /** Per-role overrides; roles left out use `provider` and `model`. */
+  readonly roles?: Partial<Record<ReasoningRoleName, RoleModelChoice>>;
+  /** Model retried when a role's primary model fails or returns invalid output. */
+  readonly fallbackModel?: string;
 }
 
 export interface RuntimeConfigurationResult {

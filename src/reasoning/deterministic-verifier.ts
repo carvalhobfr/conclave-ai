@@ -101,14 +101,18 @@ export class DeterministicClaimVerifier {
     result: FollowUpRetrievalResult,
     iteration: number,
   ): VerificationResult | undefined {
-    if (challenge.type !== "contradictory-evidence" || !hasResult(result)) return undefined;
+    if (challenge.type !== "contradictory-evidence") return undefined;
+    // Retrieval that only returns what the claim already cites cannot contradict it.
+    const cited = new Set(claim.evidenceIds);
+    const newEvidence = result.evidence.filter((evidence) => !cited.has(evidence.id));
+    if (newEvidence.length === 0 && result.graphEdges.length === 0) return undefined;
     return {
       id: verificationId(claim.id, iteration, `challenge:${challenge.id}:${result.requestId}`),
       claimId: claim.id,
       outcome: "rejected",
       method: result.graphEdges.length > 0 ? "graph" : "retrieval",
       explanation: `Follow-up retrieval for challenge ${challenge.id} found contradictory repository evidence`,
-      evidenceIds: result.evidence.map((evidence) => evidence.id),
+      evidenceIds: newEvidence.map((evidence) => evidence.id),
       graphEdgeIds: result.graphEdges.map((edge) => edge.id),
       deterministic: true,
       iteration,

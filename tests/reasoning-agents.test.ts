@@ -9,6 +9,7 @@ import { investigatorPrompt, roleSystemPrompt } from "../src/reasoning/role-prom
 import {
   parseArchitectOutput,
   parseInvestigatorOutput,
+  parseRetrievalRequest,
   StructuredOutputError,
 } from "../src/reasoning/structured-outputs.js";
 
@@ -104,6 +105,24 @@ describe("reasoning configuration", () => {
 });
 
 describe("structured reasoning agents", () => {
+  it("drops a claim check with fields it cannot honor instead of failing the role", () => {
+    const claim = { statement: "save discards write errors.", evidenceIds: ["evidence_1"], uncertainty: "none", check: { kind: "text", text: "catch {}", expectation: "present", path: "src/a.js" } };
+    const output = parseInvestigatorOutput(JSON.stringify({ summary: "s", claims: [claim] }), new Set(["evidence_1"]));
+    expect(output.claims[0]?.check).toBeUndefined();
+  });
+
+  it("treats omitted investigator retrieval requests as none", () => {
+    const claim = { statement: "save discards write errors.", evidenceIds: ["evidence_1"], uncertainty: "none" };
+    const output = parseInvestigatorOutput(JSON.stringify({ summary: "s", claims: [claim] }), new Set(["evidence_1"]));
+    expect(output.retrievalRequests).toEqual([]);
+  });
+
+  it("drops extra fields from retrieval requests but still requires the kind's own fields", () => {
+    expect(parseRetrievalRequest({ kind: "callers", symbol: "mount", expectation: "present" })).toEqual({ kind: "callers", symbol: "mount" });
+    expect(parseRetrievalRequest({ kind: "text", text: "catch {}", path: "src/feature.js" })).toEqual({ kind: "text", text: "catch {}" });
+    expect(() => parseRetrievalRequest({ kind: "symbol", symbol: "mount" })).toThrow(StructuredOutputError);
+  });
+
   const validInvestigator = JSON.stringify({
     summary: "Bootstrap reads the stored token.",
     claims: [

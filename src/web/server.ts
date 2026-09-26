@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { loadConclaveEnvironment } from "../config/environment-file.js";
 import type { ChangeSource } from "../domain/validation.js";
-import type { ConfigurableProviderId, RuntimeConfigurationRequest, RuntimeModelDiscoveryRequest } from "./contracts.js";
+import { REASONING_ROLE_NAMES, type ConfigurableProviderId, type ReasoningRoleName, type RoleModelChoice, type RuntimeConfigurationRequest, type RuntimeModelDiscoveryRequest } from "./contracts.js";
 import { ConclaveProductService, ProductServiceError } from "./product-service.js";
 
 const BODY_LIMIT_BYTES = 64_000;
@@ -75,7 +75,47 @@ function runtimeConfiguration(payload: Record<string, unknown>): RuntimeConfigur
     baseUrl: string(payload["baseUrl"], "Provider endpoint"),
     reasoningPreset,
     ...(rawApiKey === undefined ? {} : { apiKey: rawApiKey }),
+    ...roleModelOptions(payload),
   };
+}
+
+function modelName(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim() === "" || value.length > 200) {
+    throw new ProductServiceError("invalid_runtime_configuration", `${label} must be a model name.`, "Choose a model for this role.");
+  }
+  return value.trim();
+}
+
+function roleModelOptions(payload: Record<string, unknown>): Pick<RuntimeConfigurationRequest, "roles" | "fallbackModel"> {
+  const rawRoles = payload["roles"];
+  const rawFallback = payload["fallbackModel"];
+  const options: { roles?: Partial<Record<ReasoningRoleName, RoleModelChoice>>; fallbackModel?: string } = {};
+  if (rawRoles !== undefined) {
+    if (typeof rawRoles !== "object" || rawRoles === null || Array.isArray(rawRoles)) {
+      throw new ProductServiceError("invalid_runtime_configuration", "Role models must be an object.", "Choose a model for each role.");
+    }
+    const roles: Partial<Record<ReasoningRoleName, RoleModelChoice>> = {};
+    for (const [role, choice] of Object.entries(rawRoles as Record<string, unknown>)) {
+      if (!(REASONING_ROLE_NAMES as readonly string[]).includes(role)) {
+        throw new ProductServiceError("invalid_runtime_configuration", `Unknown reasoning role: ${role}.`, "Use investigator, skeptic, architect, verifier or judge.");
+      }
+      if (typeof choice !== "object" || choice === null || Array.isArray(choice)) {
+        throw new ProductServiceError("invalid_runtime_configuration", `Model for ${role} must be an object.`, "Choose a model for this role.");
+      }
+      const entry = choice as Record<string, unknown>;
+      const provider = entry["provider"];
+      if (provider !== undefined && (typeof provider !== "string" || !CONFIGURABLE_PROVIDERS.has(provider as ConfigurableProviderId))) {
+        throw new ProductServiceError("invalid_runtime_configuration", `Provider for ${role} is not configurable from this cockpit.`, "Select a supported provider.");
+      }
+      roles[role as ReasoningRoleName] = {
+        ...(provider === undefined ? {} : { provider: provider as ConfigurableProviderId }),
+        model: modelName(entry["model"], `Model for ${role}`),
+      };
+    }
+    options.roles = roles;
+  }
+  if (rawFallback !== undefined) options.fallbackModel = modelName(rawFallback, "Fallback model");
+  return options;
 }
 
 function runtimeModelDiscovery(payload: Record<string, unknown>): RuntimeModelDiscoveryRequest {

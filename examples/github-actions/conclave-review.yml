@@ -43,7 +43,7 @@ jobs:
             objective+=$'\n\n'
             objective+="${PR_BODY}"
           fi
-          npx --yes --package=conclave-ai@0.13.0 conclave review . \
+          npx --yes --package=conclave-ai@0.14.1 conclave review . \
             --base "${BASE_REF}" \
             --head "${HEAD_REF}" \
             --objective "${objective}" \

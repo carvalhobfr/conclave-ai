@@ -167,7 +167,7 @@ describe("Conclave product UI", () => {
     expect(navigation.getByRole("button", { name: /Settings/ }).getAttribute("aria-current")).toBe("page");
     expect(navigation.getByRole("button", { name: "Review" }).getAttribute("aria-current")).toBeNull();
     fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "opencode-go" } });
-    expect(screen.getByLabelText<HTMLInputElement>("Model").value).toBe("");
+    expect(screen.getByLabelText<HTMLInputElement>("Model").value).toBe("deepseek-v4.1-flash");
     fireEvent.change(screen.getByLabelText("API key"), { target: { value: "test-browser-key" } });
     fireEvent.click(screen.getByRole("button", { name: "Load available models" }));
     expect(await screen.findByRole("option", { name: "kimi-k2.7-code" })).toBeTruthy();
@@ -193,18 +193,18 @@ describe("Conclave product UI", () => {
     fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace navigation" })).getByRole("button", { name: /Settings/ }));
 
     expect(screen.getByRole("heading", { name: "Choose how you review" })).toBeTruthy();
-    expect(screen.getByText("Fast, evidence-first reviews for everyday changes.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Use Deep review" }));
-    await waitFor(() => expect(screen.getByLabelText<HTMLInputElement>("Model").value).toBe("gpt-6-astra"));
+    expect(screen.getByText("Recommended. The best measured cost-benefit for everyday reviews.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Use Free trial" }));
+    await waitFor(() => expect(screen.getByLabelText<HTMLInputElement>("Model").value).toBe("space-bunny-free"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Add Deep review favorite" }));
-    expect(screen.getByRole("button", { name: "Remove Deep review favorite" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Make Deep review default" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Free trial favorite" }));
+    expect(screen.getByRole("button", { name: "Remove Free trial favorite" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Make Free trial default" }));
     expect(screen.getByText("Default")).toBeTruthy();
     const stored = window.localStorage.getItem("conclave.councils.v1") ?? "";
-    expect(stored).toContain('"activeId":"deep-review"');
-    expect(stored).toContain('"defaultId":"deep-review"');
-    expect(stored).toContain('"deep-review"');
+    expect(stored).toContain('"activeId":"free-trial"');
+    expect(stored).toContain('"defaultId":"free-trial"');
+    expect(stored).toContain('"free-trial"');
   });
 });
 

@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["coverage/", "demo/", "dist/", "node_modules/", "eslint.config.js", "tests/fixtures/"],
+    ignores: ["coverage/", "demo/", "dist/", "node_modules/", "eslint.config.js", "tests/fixtures/", ".conclave/"],
   },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,

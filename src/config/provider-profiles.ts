@@ -18,10 +18,8 @@ export interface ReasoningStyle {
 
 const PROFILES: Readonly<Record<GuidedProviderId, readonly ProviderProfile[]>> = {
   "opencode-go": [
-    { id: "baseline", label: "Baseline", model: "deepseek-v4-flash", description: "Recommended minimum. Completes the full reasoning pipeline at the lowest measured token cost." },
-    { id: "fast", label: "Fast", model: "gpt-5.6-luna", description: "Lowest measured latency; costs more output tokens than the baseline." },
-    { id: "balanced", label: "Balanced", model: "glm-5", description: "More verbose reasoning at roughly twice the baseline token cost." },
-    { id: "code", label: "Coding", model: "kimi-k2.7-code", description: "Deeper code analysis, but slower and prone to structured-output failures in the full pipeline." },
+    { id: "baseline", label: "Essential", model: "deepseek-v4.1-flash", description: "Recommended. Best measured cost-benefit in the product lab at about $0.001 per review." },
+    { id: "free", label: "Free trial", model: "space-bunny-free", description: "No cost while OpenCode offers this preview model; it may be withdrawn at any time." },
   ],
   openai: [
     { id: "balanced", label: "Balanced", model: "gpt-5.6-terra", description: "Strong code reasoning with a balance of quality and cost." },

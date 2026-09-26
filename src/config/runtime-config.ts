@@ -69,7 +69,7 @@ function validateBaseUrl(baseUrl: string, mode: RuntimeConfig["mode"]): string {
   return parsed.toString().replace(/\/$/, "");
 }
 
-function defaultBaseUrl(provider: Exclude<ProviderId, "fake">): string | undefined {
+export function defaultBaseUrl(provider: Exclude<ProviderId, "fake">): string | undefined {
   switch (provider) {
     case "openai":
       return "https://api.openai.com/v1";

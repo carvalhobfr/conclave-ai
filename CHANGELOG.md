@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.14.1] — 2026-09-26
+
+- Role-specific model mixes with a fallback model, an optional SystemOne judge provider, OpenCode Go as the recommended low-cost default, and a reproducible product lab for measuring cost and review quality.
+
 ## [0.14.0] — 2026-09-21
 
 - A calmer cockpit for choosing saved review setups: concise presets, favorites, a default, and a quick switcher. Users can save a copy of a setup locally without exposing or retaining provider credentials in the preset.
