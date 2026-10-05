@@ -138,3 +138,12 @@ nav { display:grid; gap:4px; } nav button { color:#aeb9c7; background:transparen
 .decision-actions button.primary-action { background:#2563eb; border-color:#3b82f6; color:#fff; font-weight:700; }
 .history-panel article > button { margin-left:auto; align-self:center; white-space:nowrap; }
 .empty button, .error-card button { margin-top:12px; background:#1d2a38; color:#e7edf4; padding:10px 14px; border:1px solid #334254; border-radius:8px; cursor:pointer; }
+.assessment-note { border:1px solid #405064; border-radius:8px; padding:14px 16px; background:#101923; color:#c6d1dc; }
+.assessment-note strong { color:#e7edf4; }
+.assessment-note p { margin:6px 0 0; font-size:13px; line-height:1.5; }
+.assessment-details { margin-top:12px; padding-top:12px; border-top:1px solid #334254; color:#b7c3d0; font-size:12px; }
+.assessment-details summary { cursor:pointer; font-weight:700; }
+.assessment-details ul { list-style:none; padding:0; display:grid; gap:12px; }
+.assessment-details li { overflow-wrap:anywhere; }
+.assessment-details li span { display:block; color:#9eacbb; margin-top:3px; }
+.assessment-details p { line-height:1.5; }

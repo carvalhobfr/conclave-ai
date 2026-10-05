@@ -36,6 +36,9 @@ describe("ConclaveProductService", () => {
       expect.arrayContaining([expect.objectContaining({ status: "rejected", statement: "The token is never persisted." })]),
     );
     expect(run.trace.every((item) => item.status === "ran")).toBe(true);
+    const steps = run.claims.flatMap((claim) => claim.verificationSteps ?? []);
+    expect(steps.some((step) => step.basis === "retrieval" && step.outcome === "uncertain")).toBe(true);
+    expect(steps.some((step) => step.basis === "model" && step.outcome === "rejected")).toBe(true);
   });
 
   it("refuses local paths outside the server configured root", async () => {

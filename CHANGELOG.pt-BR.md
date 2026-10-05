@@ -4,6 +4,11 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.18.0] — 2026-10-05
+
+- O cockpit identifica avaliações do modelo e mostra, por afirmação, as buscas no código e os julgamentos semânticos, com orientação para os recibos de execução comportamental.
+- O teste de instalação global no Windows informa a versão do pacote simulado, mantendo a validação independente da disponibilidade da nova versão no npm.
+
 ## [0.17.0] — 2026-10-05
 
 - Separa observações de busca das decisões semânticas; checks de texto e grafo inconclusivos passam por verificação de modelo. Inclui testes de regressão e avaliação documentada de 60 reviews reais, com limitações e custo de latência.

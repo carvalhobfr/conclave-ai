@@ -47,6 +47,12 @@ export interface ClaimView {
   readonly evidenceIds: readonly string[];
   readonly challengeCount: number;
   readonly verificationCount: number;
+  readonly verificationSteps?: readonly {
+    readonly id: string;
+    readonly basis: "retrieval" | "model";
+    readonly outcome: "supported" | "rejected" | "uncertain";
+    readonly explanation: string;
+  }[];
 }
 
 export interface GraphView {

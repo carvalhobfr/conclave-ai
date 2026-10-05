@@ -81,7 +81,10 @@ const validation: ValidationRunView = {
 const run: ProductRunView = {
   intent: "investigate", status: "completed", title: "Investigated verdict", answer: "Evidence-backed diagnosis.",
   claims: [
-    { id: "supported", statement: "Storage persists tokens.", status: "supported", role: "investigator", evidenceIds: ["e1"], challengeCount: 0, verificationCount: 1 },
+    { id: "supported", statement: "Storage persists tokens.", status: "supported", role: "investigator", evidenceIds: ["e1"], challengeCount: 0, verificationCount: 2, verificationSteps: [
+      { id: "lookup", basis: "retrieval", outcome: "uncertain", explanation: "A caller was found; behavior still needs assessment." },
+      { id: "judgment", basis: "model", outcome: "supported", explanation: "The write path uses the supplied storage adapter." },
+    ] },
     { id: "rejected", statement: "The token is never persisted.", status: "rejected", role: "investigator", evidenceIds: ["e1"], challengeCount: 1, verificationCount: 1 },
     { id: "uncertain", statement: "A runtime race may remain.", status: "uncertain", role: "architect", evidenceIds: [], challengeCount: 0, verificationCount: 1 },
   ],
@@ -143,6 +146,15 @@ describe("Conclave product UI", () => {
     await waitFor(() => expect(screen.getByText("The token is never persisted.")).toBeTruthy());
     expect(screen.getByLabelText("rejected")).toBeTruthy();
     expect(screen.getByLabelText("uncertain")).toBeTruthy();
+    expect(screen.getByText("Model-supported")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "How to read this assessment" }).textContent).toContain("Confirm behavior");
+    const assessmentToggle = screen.getAllByText("How this was assessed")[0];
+    if (assessmentToggle === undefined) throw new Error("Expected assessment details");
+    fireEvent.click(assessmentToggle);
+    expect(screen.getByText("Source lookup")).toBeTruthy();
+    expect(screen.getByText("Model judgment")).toBeTruthy();
+    expect(screen.getByText("A caller was found; behavior still needs assessment.")).toBeTruthy();
+    expect(screen.getAllByText("No separate verification steps were recorded. This status comes from model reasoning.")).toHaveLength(2);
     const evidenceButton = screen.getAllByRole("button", { name: "Evidence" }).at(0);
     if (evidenceButton === undefined) throw new Error("Expected evidence button");
     fireEvent.click(evidenceButton);

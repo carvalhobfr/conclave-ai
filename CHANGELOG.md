@@ -4,6 +4,11 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.18.0] — 2026-10-05
+
+- The cockpit now identifies model assessments and exposes per-claim source lookups and semantic judgments, with an explicit route to behavioral execution receipts.
+- The Windows global-install test now includes the simulated package version, keeping release validation independent of whether the new version is already on npm.
+
 ## [0.17.0] — 2026-10-05
 
 - Separate retrieval observations from semantic claim decisions; unresolved text and graph checks now receive model verification. Includes regression tests and a documented 60-review provider evaluation with remaining limitations and latency costs.

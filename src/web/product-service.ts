@@ -107,6 +107,12 @@ function viewClaims(result: ReasoningResult): readonly ClaimView[] {
     evidenceIds: claim.evidenceIds,
     challengeCount: claim.challengeIds.length,
     verificationCount: claim.verificationIds.length,
+    verificationSteps: result.state.verifications.filter((item) => item.claimId === claim.id).map((item) => ({
+      id: item.id,
+      basis: item.deterministic ? "retrieval" as const : "model" as const,
+      outcome: item.outcome,
+      explanation: item.explanation,
+    })),
   }));
 }
 

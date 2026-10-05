@@ -110,7 +110,8 @@ describe("runner command resolution", () => {
       await writeFile(join(bin, "conclave.cmd"), "@echo off\r\n");
       const globalPackage = join(bin, "node_modules", "conclave-ai");
       await mkdir(join(globalPackage, "dist"), { recursive: true });
-      await writeFile(join(globalPackage, "package.json"), JSON.stringify({ name: "conclave-ai", type: "module" }));
+      const currentPackage = JSON.parse(await readFile(resolve("package.json"), "utf8")) as { version: string };
+      await writeFile(join(globalPackage, "package.json"), JSON.stringify({ name: "conclave-ai", version: currentPackage.version, type: "module" }));
       await writeFile(join(globalPackage, "dist", "cli.js"), `await import(${JSON.stringify(pathToFileURL(resolve("tests/fixtures/agent-skill/fake-conclave.mjs")).href)});\n`);
       const environment: NodeJS.ProcessEnv = { ...process.env, PATH: `${bin}${delimiter}${process.env["PATH"] ?? ""}`, CONCLAVE_FIXTURE_SCHEMA: "5" };
       delete environment["CONCLAVE_CLI_PATH"];
