@@ -96,24 +96,24 @@ describe("bounded reasoning retrieval", () => {
     );
   });
 
-  it("deterministically rejects a typed absence claim when graph evidence is found", async () => {
+  it("keeps natural-language claims unresolved when a repository-wide graph predicate differs", async () => {
     const service = await reasoningFixture();
     const executor = new FollowUpRetrievalExecutor(service, 10, 3);
     const result = await executor.execute(
       request("request_1", { kind: "callers", symbol: "bootstrapSession" }),
     );
     const verification = new DeterministicClaimVerifier().verifyCheck(
-      claim({ kind: "callers", symbol: "bootstrapSession", expectation: "absent" }),
+      { ...claim({ kind: "callers", symbol: "bootstrapSession", expectation: "absent" }), statement: "The changed handler never calls bootstrapSession and therefore loses the session." },
       result,
       1,
     );
 
     expect(verification).toEqual(
-      expect.objectContaining({ outcome: "rejected", method: "graph", deterministic: true }),
+      expect.objectContaining({ outcome: "uncertain", method: "graph", deterministic: true }),
     );
   });
 
-  it("lets a contradictory-evidence challenge reject a claim only with evidence the claim does not cite", async () => {
+  it("does not treat additional challenge evidence as proof of a contradiction", async () => {
     const service = await reasoningFixture();
     const result = await new FollowUpRetrievalExecutor(service, 10, 3).execute(
       request("request_challenge", { kind: "text", text: "bootstrapSession" }),
@@ -132,8 +132,22 @@ describe("bounded reasoning retrieval", () => {
     expect(result.evidence.length).toBeGreaterThan(0);
     expect(verifier.verifyChallenge(claim(undefined, citedIds), challenge, result, 1)).toBeUndefined();
     expect(verifier.verifyChallenge(claim(undefined, citedIds.slice(1)), challenge, result, 1)).toEqual(
-      expect.objectContaining({ outcome: "rejected", evidenceIds: citedIds.slice(0, 1) }),
+      expect.objectContaining({ outcome: "uncertain", evidenceIds: citedIds.slice(0, 1) }),
     );
+  });
+
+  it("does not promote a matching source predicate into behavioral proof", async () => {
+    const service = await reasoningFixture();
+    const result = await new FollowUpRetrievalExecutor(service, 10, 3).execute(
+      request("request_present", { kind: "text", text: "bootstrapSession" }),
+    );
+    expect(result.evidence.length).toBeGreaterThan(0);
+    const verification = new DeterministicClaimVerifier().verifyCheck(
+      { ...claim({ kind: "text", text: "bootstrapSession", expectation: "present" }), statement: "bootstrapSession restores every persisted session correctly." },
+      result, 1,
+    );
+    expect(verification).toMatchObject({ outcome: "uncertain", deterministic: true });
+    expect(verification?.evidenceIds.length).toBeGreaterThan(0);
   });
 
   it("preserves uncertainty when a graph symbol is ambiguous", async () => {

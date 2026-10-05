@@ -85,9 +85,9 @@ export class DeterministicClaimVerifier {
     return {
       id: verificationId(claim.id, iteration, `check:${check.kind}:${String(found)}`),
       claimId: claim.id,
-      outcome: supported ? "supported" : "rejected",
+      outcome: "uncertain",
       method: methodFor(check),
-      explanation: `${check.kind} expected ${check.expectation}; deterministic retrieval ${found ? "found matching evidence" : "found no matching evidence"}`,
+      explanation: `${check.kind} expected ${check.expectation}; deterministic retrieval ${found ? "found matching evidence" : "found no matching evidence"}. The retrieval predicate ${supported ? "matches" : "does not match"} the expectation; this does not establish or refute the natural-language claim. Check the exact function, scope and behavioral consequence against the source.`,
       evidenceIds: result.evidence.map((evidence) => evidence.id),
       graphEdgeIds: result.graphEdges.map((edge) => edge.id),
       deterministic: true,
@@ -109,9 +109,9 @@ export class DeterministicClaimVerifier {
     return {
       id: verificationId(claim.id, iteration, `challenge:${challenge.id}:${result.requestId}`),
       claimId: claim.id,
-      outcome: "rejected",
+      outcome: "uncertain",
       method: result.graphEdges.length > 0 ? "graph" : "retrieval",
-      explanation: `Follow-up retrieval for challenge ${challenge.id} found contradictory repository evidence`,
+      explanation: `Follow-up retrieval for challenge ${challenge.id} found additional repository evidence. The challenge label does not prove a contradiction; assess the evidence against the claim's exact scope and consequence.`,
       evidenceIds: newEvidence.map((evidence) => evidence.id),
       graphEdgeIds: result.graphEdges.map((edge) => edge.id),
       deterministic: true,

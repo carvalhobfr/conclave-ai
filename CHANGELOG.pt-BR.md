@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.17.0] — 2026-10-05
+
+- Separa observações de busca das decisões semânticas; checks de texto e grafo inconclusivos passam por verificação de modelo. Inclui testes de regressão e avaliação documentada de 60 reviews reais, com limitações e custo de latência.
+
 ## [0.16.5] — 2026-09-26
 
 - Revisão 7: a skill de agente ignora um Conclave instalado mais antigo que a versão para a qual foi feita (uma instalação global antiga podia responder sem o comando `check`) e usa o pacote npx fixado; o comando avulso do README usa `conclave-ai@latest` pelo mesmo motivo; Ctrl+C durante uma comparação de branches remove o snapshot temporário; gravações do histórico de reviews são serializadas entre processos; a dica da navegação Settings atinge o contraste WCAG AA.

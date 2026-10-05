@@ -35,6 +35,12 @@ Each report says which narrow rules examined the change and which questions rema
 
 `escalation.recommended` means more verification is warranted: relevant tests, human review, or optional model reasoning (`conclave investigate`). It never starts a model or runs repository scripts by itself, and a model cannot replace runtime evidence.
 
+### Evidence in optional model reasoning
+
+In Investigate, a text or graph lookup verifies only its retrieval predicate. Finding a caller elsewhere does not refute a claim about a particular function; finding a source expression does not prove its behavioral consequence. Retrieval observations therefore leave natural-language claims uncertain until the semantic verifier assesses the relevant source and scope. A challenge labeled contradictory evidence also requires that assessment.
+
+Semantic decisions remain model judgments (`deterministic: false`), including when their status is `supported`. They are not execution receipts or proof that the behavior was tested. This boundary may require an additional model call; when verification cannot complete, the retrieval observation alone cannot approve or dismiss a behavioral claim. The zero-model `check` command is unchanged.
+
 ```bash
 conclave check . --json | jq '.report.escalation'
 ```

@@ -63,7 +63,17 @@ export function createDemoReasoningEngine(root: string): Promise<ReasoningEngine
       return response(request, { decisions: claims.map((claim) => ({ claimId: claim.id, status: "supported", explanation: "Demo judge response; deterministic verification remains authoritative." })) });
     }
     const trusted = jsonBetween(prompt, "BEGIN TRUSTED TASK", "END TRUSTED TASK");
-    const claims = trusted["claims"] as { id: string }[];
+    const claims = trusted["claims"] as { id: string; statement: string; evidenceIds: string[] }[];
+    if (system.includes("You are the Verifier")) {
+      return response(request, { decisions: claims.map((claim) => ({
+        claimId: claim.id,
+        outcome: claim.statement === "The token is never persisted." ? "rejected" : "supported",
+        method: "model",
+        explanation: "Scripted demo assessment of the fixed authentication fixture; not a live model verification.",
+        evidenceIds: claim.evidenceIds,
+        graphEdgeIds: [],
+      })) });
+    }
     if (system.includes("You are the Skeptic")) {
       return response(request, { challenges: [{ claimId: claims[0]?.id, type: "contradictory-evidence", explanation: "Check persistToken callers before accepting the absence claim.", retrievalRequests: [{ kind: "callers", symbol: "persistToken" }] }] });
     }

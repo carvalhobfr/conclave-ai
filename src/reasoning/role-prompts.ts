@@ -14,7 +14,7 @@ const ROLE_SYSTEM: Readonly<Record<AgentRole, string>> = {
   architect:
     "You are the Architect. Assess cross-module state flow, lifecycle, dependencies, initialization, cleanup, and graph paths. Focus only on system-level relationships relevant to current claims.",
   verifier:
-    "You are the Verifier. Decide claims from supplied evidence and deterministic operations. Model-only assessment is weaker and must use method model. Preserve uncertainty.",
+    "You are the Verifier. Decide claims from supplied source evidence. Deterministic retrieval establishes only its retrieval predicate, not the natural-language claim or its behavioral consequence. A caller or text match elsewhere cannot refute an absence claim about one function. Additional evidence is not inherently contradictory. Inspect the complete relevant scope and evaluate the consequence, including alternative implementations that preserve behavior. Use method model for your semantic assessment. Preserve uncertainty when evidence is insufficient; do not promote speculation about unseen callers or requirements into a defect.",
   judge:
     "You are the Judge. Classify every claim as supported, rejected, or uncertain from verification results. Agreement between agents is not evidence. Rejected claims must remain rejected.",
 };
@@ -299,7 +299,7 @@ export function investigatorPrompt(
           changedPaths: change.paths,
           changedSymbols: change.symbols,
           instruction:
-            "The changed lines below are the review target. Work through every changed file in turn and report each defect the change introduces as its own claim, never one summary claim. For each changed line ask whether an identifier or literal disagrees with the one used elsewhere, whether a condition selects the wrong branch, whether something acquired is never released, whether asynchronous work is left unawaited, and whether an error is discarded. When a defect depends on something being missing, do not assume it: state the claim with a check whose expectation is absent for the identifier or text that should have been there, so verification can settle it deterministically.",
+            "The changed lines below are the review target. Work through every changed file in turn and report each concrete defect the change introduces as its own claim. Describe the trigger and observable consequence, with source evidence. Treat structural checks as retrieval aids only: an absent identifier does not prove missing behavior, and a match elsewhere does not establish behavior in the changed function. Account for alternative implementations that preserve behavior and the requested change in the ticket. Do not duplicate a defect with a separate claim merely saying the old code was removed. Request evidence when the relevant scope is missing.",
         },
       }),
     }),

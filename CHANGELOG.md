@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.17.0] — 2026-10-05
+
+- Separate retrieval observations from semantic claim decisions; unresolved text and graph checks now receive model verification. Includes regression tests and a documented 60-review provider evaluation with remaining limitations and latency costs.
+
 ## [0.16.5] — 2026-09-26
 
 - Review 7: the agent skill skips an installed Conclave older than the version it was built for (an old global install could answer without the `check` command) and falls back to the pinned npx package; the README's one-off command uses `conclave-ai@latest` for the same reason; Ctrl+C during a branch comparison removes its temporary snapshot; review history saves are serialized across processes; the Settings navigation hint meets WCAG AA contrast.

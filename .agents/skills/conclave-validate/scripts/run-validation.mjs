@@ -12,7 +12,7 @@ const TIMEOUT_MS = Number(process.env.CONCLAVE_TIMEOUT_MS ?? 300_000);
 const VERDICT_EXIT = { pass: 0, warn: 0, block: 1, inconclusive: 2 };
 // `npm run release:bump` keeps this pin current. Any installed Conclave older than its minor
 // release lacks commands or flags this runner relies on, so it is skipped in favour of npx.
-const PINNED_PACKAGE = "conclave-ai@0.16.5";
+const PINNED_PACKAGE = "conclave-ai@0.17.0";
 const MINIMUM_VERSION = PINNED_PACKAGE.slice("conclave-ai@".length).split(".").slice(0, 2).map(Number);
 
 function compatible(version) {

@@ -104,7 +104,19 @@ export function reasoningFixtureProvider(): FakeProvider {
       });
     }
     const trusted = jsonBetween(prompt, "BEGIN TRUSTED TASK", "END TRUSTED TASK");
-    const claims = trusted["claims"] as { id: string }[];
+    const claims = trusted["claims"] as { id: string; statement: string; evidenceIds: string[] }[];
+    if (system.includes("You are the Verifier")) {
+      return response(request, {
+        decisions: claims.map((claim) => ({
+          claimId: claim.id,
+          outcome: claim.statement === "The token is never persisted." ? "rejected" : "supported",
+          method: "model",
+          explanation: "Fixture semantic assessment against the retrieved authentication source.",
+          evidenceIds: claim.evidenceIds,
+          graphEdgeIds: [],
+        })),
+      });
+    }
     if (system.includes("You are the Skeptic")) {
       return response(request, {
         challenges: [

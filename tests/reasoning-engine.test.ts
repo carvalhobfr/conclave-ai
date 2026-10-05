@@ -7,7 +7,7 @@ import {
 } from "./helpers/reasoning-fixture.js";
 
 describe("ReasoningEngine", () => {
-  it("rejects a plausible wrong claim after graph retrieval and excludes it from the verdict", async () => {
+  it("routes retrieval-only checks through semantic verification before deciding claims", async () => {
     const result = await (await createReasoningFixtureEngine()).ask(causalQuestion);
 
     expect(result.verdict.claims.rejected.map((claim) => claim.statement)).toContain(
@@ -21,6 +21,8 @@ describe("ReasoningEngine", () => {
     expect(result.verdict.answer).toMatch(/src\/auth\/[^:]+:\d+-\d+/);
     expect(result.state.retrievalRequests.filter((request) => request.request.kind === "callers")).toHaveLength(1);
     expect(result.state.verifications.some((verification) => verification.deterministic)).toBe(true);
+    expect(result.state.verifications.filter((verification) => verification.deterministic).every((verification) => verification.outcome === "uncertain")).toBe(true);
+    expect(result.state.verifications.some((verification) => !verification.deterministic && verification.outcome === "rejected")).toBe(true);
     expect(result.verdict.traceSummary.agentsExecuted).toEqual(
       expect.arrayContaining(["investigator", "skeptic", "architect", "verifier", "judge"]),
     );

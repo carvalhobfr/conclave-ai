@@ -461,7 +461,7 @@ export class ReasoningEngine {
       }
 
       const deterministicallyResolved = new Set(
-        verifications.filter((verification) => verification.deterministic).map((verification) => verification.claimId),
+        verifications.filter((verification) => verification.deterministic && verification.outcome !== "uncertain").map((verification) => verification.claimId),
       );
       const unresolvedClaims = claims.filter((claim) => !deterministicallyResolved.has(claim.id));
       if (unresolvedClaims.length > 0) {
