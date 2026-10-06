@@ -1270,7 +1270,16 @@ async function checkRepository(args: readonly string[]): Promise<void> {
   const source: ChangeSource = hasExplicitSource
     ? selectedChangeSource(parsed)
     : { kind: "workspace", base: parsed.branch ?? inspection.defaultBase };
-  const objective = parsed.objective?.trim() || (await loadValidationContract(parsed)).objective || inferredReviewObjective(inspection);
+  // Objective cascade: the user's own words (flag, CONCLAVE_OBJECTIVE, saved contract) win; an
+  // interactive terminal is asked with the commit-derived guess prefilled; scripts and CI keep the guess.
+  const objective = parsed.objective?.trim()
+    || process.env["CONCLAVE_OBJECTIVE"]?.trim()
+    || (await loadValidationContract(parsed)).objective
+    || (parsed.json ? inferredReviewObjective(inspection) : await promptLine({
+      en: "What should this change deliver?",
+      "pt-BR": "O que esta mudança deve entregar?",
+      "es-ES": "¿Qué debe conseguir este cambio?",
+    }[cliLanguage], inferredReviewObjective(inspection)));
   if (!parsed.json) {
     const copy = interfaceCopy(cliLanguage);
     progress(copy.repository, `${inspection.currentBranch} → base ${source.kind === "workspace" ? source.base : copy.selectedSource}`);
@@ -1980,7 +1989,7 @@ async function runDemo(): Promise<void> {
 const KNOWN_COMMANDS = [
   "check", "compare", "open", "review", "validate", "pr", "history", "handoff", "doctor", "setup", "update", "start",
   "scan", "index", "search", "retrieve", "symbol", "text", "graph", "path", "ask", "investigate", "smoke", "collect",
-  "criteria", "eval", "eval-graph", "eval-reasoning", "config", "models", "init", "skill", "provider-check", "mcp", "demo", "help",
+  "criteria", "eval", "eval-graph", "eval-reasoning", "config", "models", "init", "skill", "provider-check", "mcp", "demo", "tools", "help",
 ] as const;
 
 function editDistance(left: string, right: string): number {
@@ -2016,7 +2025,15 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 
 async function main(): Promise<void> {
   await loadCliLanguage();
-  const [command = "help", ...args] = process.argv.slice(2);
+  let [command = "help", ...args] = process.argv.slice(2);
+  // `conclave tools <command>` is the grouped home of secondary commands; it forwards to the same handlers.
+  if (command === "tools") {
+    if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
+      console.log(cliHelp(cliLanguage, "tools"));
+      return;
+    }
+    [command = "help", ...args] = args;
+  }
   if (process.argv.length === 2 && process.stdin.isTTY && process.stdout.isTTY) {
     await startGuided();
     return;

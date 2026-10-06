@@ -145,6 +145,22 @@ describe.skipIf(!built)("conclave CLI end to end", () => {
     expect(result.stdout).toContain("check");
     expect(existsSync(join(root, ".conclave"))).toBe(false);
   });
+
+  it("keeps the main help short and groups secondary commands under tools", async () => {
+    const root = await repository();
+
+    const main = await runCli(["help"], root);
+    expect(main.stdout).toContain("tools");
+    expect(main.stdout).not.toContain("eval-graph");
+
+    const tools = await runCli(["tools"], root);
+    expect(tools.code).toBe(0);
+    for (const name of ["compare", "review", "graph", "mcp", "eval-graph"]) expect(tools.stdout).toContain(name);
+
+    const forwarded = await runCli(["tools", "history", root], root);
+    expect(forwarded.code).toBe(0);
+    expect(forwarded.stdout).toContain("No Conclave PR reviews");
+  });
 });
 
 it.skipIf(!built)("check does not silently drop requested attestation verification", async () => {

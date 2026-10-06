@@ -83,9 +83,12 @@ describe("CLI user preferences", () => {
 
   it("renders a complete localized command catalog and detailed command help", () => {
     const english = cliHelp("en");
-    expect(english).toContain("PR workflow");
     expect(english).toContain("check");
-    expect(english).toContain("eval-reasoning");
+    expect(english).toContain("tools");
+    expect(english).not.toContain("eval-reasoning");
+    const tools = cliHelp("en", "tools");
+    expect(tools).toContain("PR workflow");
+    expect(tools).toContain("eval-reasoning");
     expect(english).toContain("config --language pt-BR");
 
     const portuguese = cliHelp("pt-BR", "symbol");

@@ -324,9 +324,31 @@ const UI = {
   },
 } as const;
 
+// Everyday commands; everything else lives under `conclave tools` (old names keep working).
+const CORE_COMMANDS = ["check", "ask", "investigate", "open", "history", "handoff", "init", "config", "doctor"] as const;
+const TOOLS_SUMMARY = localized(
+  "Everything else: compare, pr, review, search, graph, index, mcp, eval, ...",
+  "Todo o resto: compare, pr, review, search, graph, index, mcp, eval, ...",
+  "Todo lo demás: compare, pr, review, search, graph, index, mcp, eval, ...",
+);
+
+function toolsHelp(language: InterfaceLanguage): string {
+  const ui = UI[language];
+  const lines = ["CONCLAVE · tools", "", `${ui.usage}: conclave tools <command> [options]   # same as conclave <command>`];
+  for (const group of ["workflow", "intelligence", "setup", "advanced"] as const) {
+    const commands = COMMANDS.filter((item) => item.group === group && !(CORE_COMMANDS as readonly string[]).includes(item.id) && item.id !== "help" && item.id !== "start");
+    if (commands.length === 0) continue;
+    lines.push("", GROUPS[group][language]);
+    for (const command of commands) lines.push(`  ${command.id.padEnd(16)} ${command.description[language]}`);
+  }
+  lines.push("", ui.helpHint);
+  return lines.join("\n");
+}
+
 export function cliHelp(language: InterfaceLanguage, requestedCommand?: string): string {
   const ui = UI[language];
   const requested = requestedCommand === "skill install" ? "skill" : requestedCommand;
+  if (requested === "tools") return toolsHelp(language);
   if (requested !== undefined && requested !== "") {
     const command = COMMANDS.find((item) => item.id === requested);
     if (command === undefined) return `${ui.commandNotFound} \`${requested}\`.\n\n${cliHelp(language)}`;
@@ -345,6 +367,7 @@ export function cliHelp(language: InterfaceLanguage, requestedCommand?: string):
       ui.helpHint,
     ].join("\n");
   }
+  const entry = (command: CommandHelp) => `  ${command.id.padEnd(16)} ${command.description[language]}`;
   const lines = [
     "CONCLAVE",
     ui.tagline,
@@ -353,15 +376,12 @@ export function cliHelp(language: InterfaceLanguage, requestedCommand?: string):
     "       conclave                  # guided menu",
     "       conclave help <command>   # command details",
     "",
-    ui.allCommands,
+    ...CORE_COMMANDS.map((id) => COMMANDS.find((item) => item.id === id)).filter((item) => item !== undefined).map(entry),
+    "",
+    `  ${"tools".padEnd(16)} ${TOOLS_SUMMARY[language]}`,
+    "",
+    "  --version        " + localized("Print the installed version.", "Mostra a versão instalada.", "Muestra la versión instalada.")[language],
   ];
-  for (const group of ["workflow", "intelligence", "setup", "advanced"] as const) {
-    lines.push("", GROUPS[group][language]);
-    for (const command of COMMANDS.filter((item) => item.group === group)) {
-      lines.push(`  ${command.id.padEnd(16)} ${command.description[language]}`);
-    }
-  }
-  lines.push("", "  --version        " + localized("Print the installed version.", "Mostra a versão instalada.", "Muestra la versión instalada.")[language]);
   lines.push("", ui.helpHint, ui.languageHint);
   return lines.join("\n");
 }

@@ -109,6 +109,17 @@ Não sabe o que rodar? Digite `conclave` para abrir o menu guiado, ou `conclave 
 | 🖥️ | **Cockpit** | Ler resultados, diffs e histórico no navegador | `conclave open .` | [Guia do cockpit](docs/guides/cockpit.pt-BR.md) |
 | 🤖 | **Skill de agente** | Fazer o Claude Code ou o Codex revisar o próprio trabalho antes do merge | `conclave setup .` | [Guia da skill](docs/guides/agent-skill.pt-BR.md) |
 
+Como biblioteca:
+
+```js
+import { check, ask } from "conclave-ai";
+
+const { verdict, handoff } = await check({ repository: ".", objective: "Proteger o fluxo de login" });
+const answer = await ask("Onde a sessão é renovada?");
+```
+
+Sem `objective`, ele é inferido do último commit (`objectiveInferred` informa). Os comandos do dia a dia são `check`, `ask`, `investigate`, `open`, `history`, `handoff`, `init`, `config` e `doctor`; o resto fica em `conclave tools`.
+
 E ainda um [workflow pronto de GitHub Actions](docs/guides/github-actions.pt-BR.md) que comenta em cada pull request. Todos usam o mesmo motor local e compartilham configurações e histórico.
 
 ## Receitas

@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.19.0] — 2026-10-06
+
+- Cleaner product surface: the main help lists nine everyday commands and groups the rest under `conclave tools` (old names still work); `check` asks what the change should deliver in a terminal (prefilled from the latest commit) and reads `CONCLAVE_OBJECTIVE`; the agent skill passes the user's own prompt as the objective; new library API `check`, `ask`, `handoff` as the package entry point.
+
 ## [0.18.0] — 2026-10-05
 
 - The cockpit now identifies model assessments and exposes per-claim source lookups and semantic judgments, with an explicit route to behavioral execution receipts.

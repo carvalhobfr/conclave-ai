@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.19.0] — 2026-10-06
+
+- Superfície mais limpa: o help principal lista nove comandos do dia a dia e agrupa o resto em `conclave tools` (nomes antigos continuam); `check` pergunta o que a mudança deve entregar no terminal (pré-preenchido pelo último commit) e lê `CONCLAVE_OBJECTIVE`; o skill de agente passa o prompt do próprio usuário como objetivo; nova API de biblioteca `check`, `ask`, `handoff` como entrada do pacote.
+
 ## [0.18.0] — 2026-10-05
 
 - O cockpit identifica avaliações do modelo e mostra, por afirmação, as buscas no código e os julgamentos semânticos, com orientação para os recibos de execução comportamental.

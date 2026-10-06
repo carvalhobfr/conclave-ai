@@ -109,6 +109,17 @@ Not sure what to run? Type `conclave` for a guided menu, or `conclave help <comm
 | 🖥️ | **Cockpit** | Reading results, diffs, and history in a browser | `conclave open .` | [Cockpit guide](docs/guides/cockpit.md) |
 | 🤖 | **Agent skill** | Letting Claude Code or Codex review its own work before you merge | `conclave setup .` | [Skill guide](docs/guides/agent-skill.md) |
 
+As a library:
+
+```js
+import { check, ask } from "conclave-ai";
+
+const { verdict, handoff } = await check({ repository: ".", objective: "Protect the login flow" });
+const answer = await ask("Where is the session refreshed?");
+```
+
+Omit `objective` and it is inferred from the latest commit (`objectiveInferred` says so). Everyday commands are `check`, `ask`, `investigate`, `open`, `history`, `handoff`, `init`, `config`, `doctor`; the rest live under `conclave tools`.
+
 Plus a ready-made [GitHub Actions workflow](docs/guides/github-actions.md) that comments on every pull request. All of them run the same local engine and share settings and history.
 
 ## Recipes
