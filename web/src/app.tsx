@@ -1,6 +1,6 @@
 import { FeedbackPanel } from "./finding-feedback.js";
 import { AcceptanceEditor } from "./acceptance-editor.js";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   EvidenceView,
@@ -17,6 +17,8 @@ import type {
 } from "../../src/web/contracts.js";
 import { createReviewDecision } from "../../src/domain/review-decision.js";
 import { api } from "./api.js";
+import { Cockpit, type CockpitCounts } from "./cockpit/cockpit.js";
+import type { CockpitSection } from "./cockpit/overview.js";
 
 const DEFAULT_VALIDATE = "Verify that this change resolves its stated objective without unrelated regressions.";
 const DEFAULT_ASK = "Where is bootstrapSession called?";
@@ -373,7 +375,15 @@ export function App() {
   const [previousReviewId, setPreviousReviewId] = useState("");
   const [receiptEnvelope, setReceiptEnvelope] = useState<unknown>();
   useEffect(() => { setValidationRun(undefined); setPreviousReviewId(""); setReceiptEnvelope(undefined); setContractText(""); }, [project?.id]);
-  const [tab, setTab] = useState<WorkspaceTab>("verdict");
+  const [tab, setTabState] = useState<WorkspaceTab>("verdict");
+  // The repository-intelligence screens. `undefined` is the review workspace (Review, Ask, Investigate, History, Settings).
+  const [section, setSectionState] = useState<CockpitSection>();
+  // Counts the user's own navigation, so a repository that finishes opening later does not pull them off the screen they chose.
+  const navigations = useRef(0);
+  const setSection = (next: CockpitSection | undefined) => { navigations.current += 1; setSectionState(next); };
+  const landOnOverview = (navigationsAtOpen: number) => { if (navigations.current === navigationsAtOpen) setSectionState("overview"); };
+  const [counts, setCounts] = useState<CockpitCounts>({ findings: 0, proposals: 0 });
+  const setTab = (next: WorkspaceTab) => { setSection(undefined); setTabState(next); };
   const [selectedEvidence, setSelectedEvidence] = useState<string>();
   const [localPath, setLocalPath] = useState("");
   const [busy, setBusy] = useState(false);
@@ -424,25 +434,38 @@ export function App() {
     const created: SavedConclave = { ...source, id, name, description: "A saved review setup you can return to anytime.", cost: "Moderate" };
     setConclaveLibrary((current) => ({ ...current, activeId: id, favoriteIds: [...current.favoriteIds, id], custom: [...current.custom, created] }));
   };
-  const openDemo = async () => { setBusy(true); try { const opened = await api.demo(); setProject(opened); setNotice("Demo Mode uses deterministic repository and change fixtures. Validation makes no model call."); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not open Demo Mode."); } finally { setBusy(false); } };
+  // With nothing open there is no page to put a notice above, so a failed open is shown in the page itself, with the same attempt offered again.
+  const [openFailure, setOpenFailure] = useState<{ readonly message: string; readonly retry: () => void }>();
+  const openFailed = (error: unknown, fallback: string, retry: () => void): void => {
+    const message = error instanceof Error ? error.message : fallback;
+    if (project === undefined) { setNotice(""); setOpenFailure({ message, retry }); } else setNotice(message);
+  };
+  const openDemo = async () => { setBusy(true); setOpenFailure(undefined); try { const opened = await api.demo(); setProject(opened); setNotice("Demo Mode uses deterministic repository and change fixtures. Validation makes no model call."); } catch (error) { openFailed(error, "Could not open Demo Mode.", () => void openDemo()); } finally { setBusy(false); } };
+  const openFromLink = (repository: string): void => {
+    setBusy(true);
+    setOpenFailure(undefined);
+    const navigationsAtOpen = navigations.current;
+    void api.open(repository).then((opened) => {
+      setProject(opened);
+      // A repository opened from the command line lands on what is known about it.
+      landOnOverview(navigationsAtOpen);
+      setSourceKind("workspace");
+      setSourceRef(opened.git?.defaultBase ?? "master");
+      if (opened.git?.suggestedObjective !== undefined) setInput(opened.git.suggestedObjective);
+      return api.history(opened.id).then(setHistory);
+    }).catch((error: unknown) => openFailed(error, "Could not open repository.", () => openFromLink(repository)))
+      .finally(() => setBusy(false));
+  };
   useEffect(() => {
     void api.runtime().then(setRuntime).catch(() => undefined);
     const repository = new URLSearchParams(window.location.search).get("repository");
     if (repository === null) { void openDemo(); return; }
     setLocalPath(repository);
-    setBusy(true);
-    void api.open(repository).then((opened) => {
-      setProject(opened);
-      setSourceKind("workspace");
-      setSourceRef(opened.git?.defaultBase ?? "master");
-      if (opened.git?.suggestedObjective !== undefined) setInput(opened.git.suggestedObjective);
-      return api.history(opened.id).then(setHistory);
-    }).catch((error: unknown) => setNotice(error instanceof Error ? error.message : "Could not open repository."))
-      .finally(() => setBusy(false));
+    openFromLink(repository);
   }, []);
   const modeCopy = useMemo(() => intent === "validate" ? "Review this change" : intent === "ask" ? "Evidence-backed answer" : "Structured causal analysis", [intent]);
   const setActiveIntent = (next: ProductIntent) => { setIntent(next); setInput(next === "validate" ? DEFAULT_VALIDATE : next === "ask" ? DEFAULT_ASK : DEFAULT_INVESTIGATE); setTab("verdict"); };
-  const openLocal = async () => { if (localPath.trim() === "") return; setBusy(true); try { const opened = await api.open(localPath); setProject(opened); setSourceKind("workspace"); setSourceRef(opened.git?.defaultBase ?? "master"); if (opened.git?.suggestedObjective !== undefined) setInput(opened.git.suggestedObjective); setHistory(await api.history(opened.id)); setNotice("Repository ready. Branch commits and every local change can be reviewed together."); } catch (error) { setNotice(error instanceof Error ? error.message : "Could not open local folder."); } finally { setBusy(false); } };
+  const openLocal = async () => { if (localPath.trim() === "") return; setBusy(true); setOpenFailure(undefined); const navigationsAtOpen = navigations.current; try { const opened = await api.open(localPath); setProject(opened); landOnOverview(navigationsAtOpen); setSourceKind("workspace"); setSourceRef(opened.git?.defaultBase ?? "master"); if (opened.git?.suggestedObjective !== undefined) setInput(opened.git.suggestedObjective); setHistory(await api.history(opened.id)); setNotice("Repository ready. Branch commits and every local change can be reviewed together."); } catch (error) { openFailed(error, "Could not open local folder.", () => void openLocal()); } finally { setBusy(false); } };
   const submit = async () => {
     if (project === undefined) return;
     setBusy(true);
@@ -473,17 +496,28 @@ export function App() {
   };
   const explore = async (symbol: string) => { if (project === undefined) return; try { const next = await api.graph(project.id, symbol); setRun((current) => current === undefined ? current : { ...current, graph: next }); setTab("graph"); } catch (error) { setNotice(error instanceof Error ? error.message : "Graph lookup failed."); } };
   const showResults = tab !== "settings" && run !== undefined;
-  const workspaceNavigationActive = tab !== "settings" && tab !== "history";
+  // Settings and History do not need a repository, so a failed open does not replace them.
+  const nothingOpened = project === undefined && openFailure !== undefined && (section !== undefined || (tab !== "settings" && tab !== "history"));
+  const workspaceNavigationActive = section === undefined && tab !== "settings" && tab !== "history";
+  const cockpitButton = (id: CockpitSection, label: string, count?: number) => <button className={section === id ? "nav-active" : ""} aria-current={section === id ? "page" : undefined} onClick={() => setSection(id)}>{label}{count === undefined || count === 0 ? null : <span className="nav-count" aria-label={`${String(count)} waiting`}>{count}</span>}</button>;
 
   return <main className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><span className="mark">C</span><div><strong>Conclave</strong><small>Your PR review companion</small></div></div>
+      <div className="brand"><span className="mark">C</span><div><strong>Conclave</strong><small>Repository intelligence</small></div></div>
       <nav aria-label="Workspace navigation">
+        <span className="nav-group">Repository</span>
+        {cockpitButton("overview", "Overview")}
+        {cockpitButton("audits", "Repository audits")}
+        {cockpitButton("findings", "Findings inbox", counts.findings)}
+        {cockpitButton("proposals", "Issue proposals", counts.proposals)}
+        {cockpitButton("architecture", "Architecture")}
+        <span className="nav-group">Changes</span>
         <button className={workspaceNavigationActive && intent === "validate" ? "nav-active" : ""} aria-current={workspaceNavigationActive && intent === "validate" ? "page" : undefined} onClick={() => setActiveIntent("validate")}>Review</button>
         <button className={workspaceNavigationActive && intent === "ask" ? "nav-active" : ""} aria-current={workspaceNavigationActive && intent === "ask" ? "page" : undefined} onClick={() => setActiveIntent("ask")}>Ask</button>
         <button className={workspaceNavigationActive && intent === "investigate" ? "nav-active" : ""} aria-current={workspaceNavigationActive && intent === "investigate" ? "page" : undefined} onClick={() => setActiveIntent("investigate")}>Investigate</button>
-        <button className={tab === "history" ? "nav-active" : ""} aria-current={tab === "history" ? "page" : undefined} onClick={() => setTab("history")}>History</button>
-        <button className={tab === "settings" ? "nav-active" : ""} aria-current={tab === "settings" ? "page" : undefined} onClick={() => setTab("settings")}>Settings <small>local</small></button>
+        <button className={section === undefined && tab === "history" ? "nav-active" : ""} aria-current={section === undefined && tab === "history" ? "page" : undefined} onClick={() => setTab("history")}>History</button>
+        <span className="nav-group">Configuration</span>
+        <button className={section === undefined && tab === "settings" ? "nav-active" : ""} aria-current={section === undefined && tab === "settings" ? "page" : undefined} onClick={() => setTab("settings")}>Settings <small>local</small></button>
       </nav>
       <section className="repo-picker">
         <h2>Repository</h2>
@@ -494,10 +528,12 @@ export function App() {
       </section>
     </aside>
     <section className="workspace">
-      <header className="topbar"><div>{project === undefined ? <span>Opening project…</span> : <><strong>{project.name}</strong><span>{project.path}</span></>}</div><div className="topbar-actions"><label className="conclave-switcher"><span className="sr-only">Active Conclave</span><select value={conclaveLibrary.activeId} onChange={(event) => chooseConclave(event.target.value, true)}><optgroup label="Favorites">{allConclaves(conclaveLibrary).filter((item) => conclaveLibrary.favoriteIds.includes(item.id)).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</optgroup><optgroup label="All Conclaves">{allConclaves(conclaveLibrary).filter((item) => !conclaveLibrary.favoriteIds.includes(item.id)).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</optgroup></select></label><div className="mode-badge">{runtime?.active === "local" ? "LOCAL MODEL" : runtime?.available ? "REASONING READY" : "REVIEW READY"}</div></div></header>
+      <header className="topbar"><div>{project === undefined ? <span>{openFailure === undefined ? "Opening project…" : "No repository open"}</span> : <><strong>{project.name}</strong><span>{project.path}</span></>}</div><div className="topbar-actions"><label className="conclave-switcher"><span className="sr-only">Active Conclave</span><select value={conclaveLibrary.activeId} onChange={(event) => chooseConclave(event.target.value, true)}><optgroup label="Favorites">{allConclaves(conclaveLibrary).filter((item) => conclaveLibrary.favoriteIds.includes(item.id)).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</optgroup><optgroup label="All Conclaves">{allConclaves(conclaveLibrary).filter((item) => !conclaveLibrary.favoriteIds.includes(item.id)).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</optgroup></select></label><div className="mode-badge">{runtime?.active === "local" ? "LOCAL MODEL" : runtime?.available ? "REASONING READY" : "REVIEW READY"}</div></div></header>
       {notice !== "" && <div className="notice" role="status">{notice}</div>}
       {busy && <div className="review-progress" role="progressbar" aria-label="Conclave is analyzing the repository"><span /></div>}
-      {tab !== "settings" && tab !== "history" && <>
+      {nothingOpened && <div className="ck"><section className="ck-empty" role="alert" aria-label="Repository could not be opened"><h2>Could not open the repository</h2><p>{openFailure.message}</p><p style={{ marginTop: 16 }}><button type="button" className="ck-btn primary" onClick={openFailure.retry} disabled={busy}>Try again</button></p><p className="ck-faint" style={{ marginTop: 12 }}>Or open another folder, or the deterministic demo, from the sidebar.</p></section></div>}
+      {!nothingOpened && section !== undefined && <Cockpit project={project} section={section} onNavigate={setSection} onCounts={setCounts} />}
+      {!nothingOpened && section === undefined && tab !== "settings" && tab !== "history" && <>
       <section className="composer" aria-label="Conclave composer">
         <div className="composer-title"><h1>{modeCopy}</h1><p>{intent === "validate" ? "Compare the real Git change, follow affected code, and prepare it for human review." : "Explore the repository with bounded evidence. These optional modes may use your configured provider."}</p></div>
         <label className="sr-only" htmlFor="query">{intent === "validate" ? "Change objective" : "Repository question"}</label>
@@ -510,7 +546,7 @@ export function App() {
       </section>
       <section className="project-stats">{project !== undefined && <><span>{project.indexedFiles} files indexed</span><span>{project.symbols} functions, classes, and code units</span><span>{project.graphEdges} code relationships</span></>}</section>
       </>}
-      {tab === "settings" ? <ConfigurationPanel runtime={runtime} onRuntime={setRuntime} library={conclaveLibrary} onSelectConclave={(id) => chooseConclave(id, false)} onDefaultConclave={defaultConclave} onFavoriteConclave={favoriteConclave} onCreateConclave={createConclave} /> : tab === "history" ? <HistoryPanel records={history} onContinue={continueReview} /> : intent === "validate" ? (validationRun === undefined ? <Empty title="From code change to a safer PR" detail="Choose the change, confirm its objective, and let Conclave collect the context a reviewer or coding agent needs next." /> : <><ValidationWorkspace result={validationRun} tab={tab} onSelect={setTab} />{tab === "findings" && project?.source === "local" && <FeedbackPanel key={validationRun.report.lineage.reviewId} projectId={project.id} report={validationRun.report} />}</>) : !showResults ? <section className="empty"><h2>Ask the repository</h2><p>Type a focused question or a suspected behavior above, then press Run (or ⌘/Ctrl + Enter).</p>{runtime !== undefined && !runtime.available && <button type="button" onClick={() => setTab("settings")}>Set up a provider first</button>}</section> : <><div className="result-tabs" role="tablist" aria-label="Result views"><button role="tab" aria-selected={tab === "verdict"} onClick={() => setTab("verdict")}>Verdict</button><button role="tab" aria-selected={tab === "evidence"} onClick={() => setTab("evidence")}>Evidence</button><button role="tab" aria-selected={tab === "graph"} onClick={() => setTab("graph")}>Graph</button><button role="tab" aria-selected={tab === "retrieval"} onClick={() => setTab("retrieval")}>Retrieval</button></div>{run.error !== undefined ? <section className="error-card"><span>Error · {run.error.code}</span><h2>{run.title}</h2><p>{run.error.message}</p><p>{run.error.action}</p><button type="button" onClick={() => setTab("settings")}>Configure provider</button></section> : tab === "verdict" ? <section className="verdict"><header><span className={`verdict-status ${run.status}`}>{statusLabel(run.status)}</span><h2>{run.title}</h2></header><p className="answer">{run.answer}</p><Claims run={run} onEvidence={(id) => { setSelectedEvidence(id); setTab("evidence"); }} /><section className="trace"><h3>Bounded role route</h3>{run.trace.map((item) => <div key={item.role}><strong>{item.role}</strong><span>{item.status === "ran" ? "✓ ran" : "○ skipped"}</span><small>{item.reason}</small></div>)}</section><section className="metrics">{run.metrics.map((metric) => <div key={metric.label}><strong>{metric.value}</strong><span>{metric.label}</span></div>)}</section></section> : tab === "evidence" ? <EvidencePanel evidence={run.evidence} selected={selectedEvidence} onSelect={setSelectedEvidence} /> : tab === "graph" ? <GraphPanel graph={run.graph} onSearch={(value) => void explore(value)} /> : <RetrievalPanel run={run} />}</>}
+      {section !== undefined ? null : tab === "settings" ? <ConfigurationPanel runtime={runtime} onRuntime={setRuntime} library={conclaveLibrary} onSelectConclave={(id) => chooseConclave(id, false)} onDefaultConclave={defaultConclave} onFavoriteConclave={favoriteConclave} onCreateConclave={createConclave} /> : tab === "history" ? <HistoryPanel records={history} onContinue={continueReview} /> : intent === "validate" ? (validationRun === undefined ? <Empty title="From code change to a safer PR" detail="Choose the change, confirm its objective, and let Conclave collect the context a reviewer or coding agent needs next." /> : <><ValidationWorkspace result={validationRun} tab={tab} onSelect={setTab} />{tab === "findings" && project?.source === "local" && <FeedbackPanel key={validationRun.report.lineage.reviewId} projectId={project.id} report={validationRun.report} />}</>) : !showResults ? <section className="empty"><h2>Ask the repository</h2><p>Type a focused question or a suspected behavior above, then press Run (or ⌘/Ctrl + Enter).</p>{runtime !== undefined && !runtime.available && <button type="button" onClick={() => setTab("settings")}>Set up a provider first</button>}</section> : <><div className="result-tabs" role="tablist" aria-label="Result views"><button role="tab" aria-selected={tab === "verdict"} onClick={() => setTab("verdict")}>Verdict</button><button role="tab" aria-selected={tab === "evidence"} onClick={() => setTab("evidence")}>Evidence</button><button role="tab" aria-selected={tab === "graph"} onClick={() => setTab("graph")}>Graph</button><button role="tab" aria-selected={tab === "retrieval"} onClick={() => setTab("retrieval")}>Retrieval</button></div>{run.error !== undefined ? <section className="error-card"><span>Error · {run.error.code}</span><h2>{run.title}</h2><p>{run.error.message}</p><p>{run.error.action}</p><button type="button" onClick={() => setTab("settings")}>Configure provider</button></section> : tab === "verdict" ? <section className="verdict"><header><span className={`verdict-status ${run.status}`}>{statusLabel(run.status)}</span><h2>{run.title}</h2></header><p className="answer">{run.answer}</p><Claims run={run} onEvidence={(id) => { setSelectedEvidence(id); setTab("evidence"); }} /><section className="trace"><h3>Bounded role route</h3>{run.trace.map((item) => <div key={item.role}><strong>{item.role}</strong><span>{item.status === "ran" ? "✓ ran" : "○ skipped"}</span><small>{item.reason}</small></div>)}</section><section className="metrics">{run.metrics.map((metric) => <div key={metric.label}><strong>{metric.value}</strong><span>{metric.label}</span></div>)}</section></section> : tab === "evidence" ? <EvidencePanel evidence={run.evidence} selected={selectedEvidence} onSelect={setSelectedEvidence} /> : tab === "graph" ? <GraphPanel graph={run.graph} onSearch={(value) => void explore(value)} /> : <RetrievalPanel run={run} />}</>}
     </section>
   </main>;
 }

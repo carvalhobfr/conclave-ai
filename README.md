@@ -34,6 +34,7 @@ change → Conclave review → coding agent fixes findings → Conclave rechecks
 - [Install](#install)
 - [Quick start](#quick-start)
 - [One engine, three ways to use it](#one-engine-three-ways-to-use-it)
+- [Repository Intelligence](#repository-intelligence)
 - [Recipes](#recipes)
 - [Verdicts and exit codes](#verdicts-and-exit-codes)
 - [Configuration](#configuration)
@@ -122,6 +123,43 @@ Omit `objective` and it is inferred from the latest commit (`objectiveInferred` 
 
 Plus a ready-made [GitHub Actions workflow](docs/guides/github-actions.md) that comments on every pull request. All of them run the same local engine and share settings and history.
 
+## Repository Intelligence
+
+Review looks at a change. Repository Intelligence looks at the whole repository as it is on disk, and keeps what it finds so a person can decide what to do with it.
+
+```bash
+conclave audit .                  # Static: deterministic rules, no model, no network
+conclave audit . --semantic       # Smart: a model also reads bounded regions and proposes hypotheses
+conclave audit . --semantic --deep  # Deep: the reasoning roles challenge each hypothesis
+conclave findings list            # what the audits recorded
+conclave open .                   # the same, in the cockpit
+```
+
+| Mode | What runs | Leaves your machine |
+| --- | --- | --- |
+| **Static** | Six deterministic rules over the indexed source and import graph | Nothing |
+| **Smart** | Static, then a model reads bounded regions and one verifier checks each hypothesis | Sanitized source of those regions, to the provider you configured |
+| **Deep** | Static, then discovery and the five reasoning roles on each hypothesis | Same as Smart, with several times the calls |
+
+Smart and Deep are off by default, stop at the budget you set, and show the provider, models and budget before the first call. In the cockpit they start only after you confirm that disclosure.
+
+**A hypothesis is not a verified defect.** Conclave keeps these apart everywhere:
+
+| | Static finding | AI hypothesis |
+| --- | --- | --- |
+| Comes from | A rule that matched the source | A model's reading of the source |
+| Can fail `--fail-on` | Yes | Never |
+| "Model-supported" means | Not applicable | A second model reading agreed. Not confirmation, not a reproduction |
+| Becomes confirmed when | A person classifies it | A person classifies it |
+
+Nothing is executed, so nothing is ever reported as reproduced. An audit with no findings is not evidence that the code is correct.
+
+**Findings inbox and issue proposals.** Every audit is recorded in a local ledger (`.conclave/findings/ledger.json`) that tracks each finding as new, persistent, resolved or reappeared. You classify findings (`confirmed`, `false-positive`, `accepted-risk`, `needs-investigation`), draft an issue proposal from one, edit it, and approve one exact revision. Editing the text, reclassifying the finding or changing the source behind it voids the approval.
+
+**Publishing to GitHub is not implemented.** Proposals stay local: no command, cockpit action or API route creates a GitHub issue, and `conclave issues publish` returns an error.
+
+**In the cockpit.** `conclave open .` now lands on **Overview** and adds **Repository audits**, **Findings inbox**, **Issue proposals** and **Architecture** beside Review, Ask and Investigate. [Cockpit guide →](docs/guides/cockpit.md) · [Repository audit →](docs/repository-audit.md) · [Finding workflow →](docs/finding-workflow.md) · [Semantic discovery →](docs/semantic-discovery.md)
+
 ## Recipes
 
 **Review before you open a pull request**
@@ -181,7 +219,7 @@ The JSON has three top-level fields: `summary`, `report` (see the [schema](schem
 
 ## Configuration
 
-Review needs **no configuration and no key**. A model is only used by the optional Ask and Investigate modes:
+Review and the Static audit need **no configuration and no key**. A model is only used by the optional Ask and Investigate modes and by a Smart or Deep audit:
 
 ```bash
 conclave init                               # provider → model → API key, three steps
@@ -209,7 +247,7 @@ Settings live per user in `~/.config/conclave/credentials.env` (owner-only permi
 | Repository scripts executed | Never | Never |
 | Telemetry | None | None |
 
-Conclave writes only to `.conclave/` in your repository (code map cache, history, criteria) and to your user settings folder. The cockpit listens on `127.0.0.1` only, and the browser never receives your API key. See [security boundaries](docs/security.md).
+Conclave writes only to `.conclave/` in your repository (code map cache, history, criteria) and to your user settings folder. `conclave audit` is like review (no model, no network) unless you add `--semantic`, which sends sanitized, bounded regions to your provider like Ask does. The cockpit listens on `127.0.0.1` only, and the browser never receives your API key. See [security boundaries](docs/security.md).
 
 ## How it compares
 
@@ -223,7 +261,7 @@ Conclave writes only to `.conclave/` in your repository (code map cache, history
 ## FAQ
 
 **Does Conclave send my code anywhere?**
-Not during review. Only Ask and Investigate call a model, and only the provider you configured. With Ollama or LM Studio nothing leaves your machine.
+Not during review or a Static audit. Only Ask, Investigate and a Smart or Deep audit call a model, and only the provider you configured. With Ollama or LM Studio nothing leaves your machine.
 
 **Is it free?**
 Yes, MIT licensed, and review costs nothing to run. Optional Ask and Investigate cost whatever your provider charges; the Essential preset measured about $0.0015 per run in our product lab.
@@ -266,7 +304,8 @@ The verdict comes from deterministic rules with cited evidence, so the same chan
 | Guide | What's inside |
 | --- | --- |
 | [CLI](docs/guides/cli.md) | Every command, options, settings, environment variables, local models |
-| [Cockpit](docs/guides/cockpit.md) | Browser interface, saved Conclaves, three-click flows |
+| [Cockpit](docs/guides/cockpit.md) | Browser interface, repository screens, audits, findings inbox, issue proposals, saved Conclaves |
+| [Repository audit](docs/repository-audit.md) · [Finding workflow](docs/finding-workflow.md) · [Semantic discovery](docs/semantic-discovery.md) | Whole-repository audit, the finding ledger and proposals, model hypotheses |
 | [Agent skill](docs/guides/agent-skill.md) | Claude Code and Codex setup, prompts, correction loop, MCP |
 | [GitHub Actions](docs/guides/github-actions.md) | Pull-request workflow and CI evidence |
 | [How it works](docs/guides/how-it-works.md) | Pipeline, supported languages, coverage, when a model is worth it |

@@ -668,14 +668,15 @@ describe("triage and issue proposals", () => {
 
   it("neutralizes repository-controlled text in the generated issue body", async () => {
     // A file name is repository content; here it tries to mention a user and close the code span.
-    const hostile = "src/@maintainer `x` [link](javascript:alert).ts";
+    // No ":" in it: NTFS cannot store that name, so the fixture would not exist on Windows.
+    const hostile = "src/@maintainer `x` [link](evil).ts";
     const root = await repository({ [hostile]: "export function quiet() {\n  try { go(); } catch {}\n}\n" });
     const { proposal } = await proposalFor(root, hostile, 2);
     const outsideCode = proposal.body.replace(/```text\n[\s\S]*?\n```/gu, "").replace(/`[^`\n]*`/gu, "");
 
     expect(outsideCode).not.toContain("@maintainer");
     expect(outsideCode).not.toContain("[link](");
-    expect(proposal.body).toContain("`src/@maintainer 'x' [link](javascript:alert).ts:2`");
+    expect(proposal.body).toContain("`src/@maintainer 'x' [link](evil).ts:2`");
   });
 });
 

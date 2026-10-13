@@ -23,6 +23,8 @@ it.skipIf(process.env["CONCLAVE_BROWSER_TESTS"] !== "1")("saves criteria, reload
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     const errors: string[] = []; page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${String(address.port)}/?repository=${encodeURIComponent(root)}`);
+    // A repository opened by path lands on its overview; change review is one click away.
+    await page.getByRole("navigation", { name: "Workspace navigation" }).getByRole("button", { name: "Review", exact: true }).click();
     await page.locator("summary", { hasText: "Options" }).click();
     await page.getByRole("button", { name: "Add criterion", exact: true }).click();
     await page.getByLabel(/Expected result/u).fill("Survives reload");
@@ -31,6 +33,7 @@ it.skipIf(process.env["CONCLAVE_BROWSER_TESTS"] !== "1")("saves criteria, reload
     await page.getByRole("button", { name: "Save criteria", exact: true }).click();
     await page.getByText("Criteria saved for future reviews.", { exact: true }).waitFor();
     await page.reload();
+    await page.getByRole("navigation", { name: "Workspace navigation" }).getByRole("button", { name: "Review", exact: true }).click();
     await page.getByLabel(/Expected result/u).waitFor();
     expect(await page.getByLabel(/Expected result/u).inputValue()).toBe("Survives reload");
     expect(await page.getByRole("checkbox").isChecked()).toBe(true);

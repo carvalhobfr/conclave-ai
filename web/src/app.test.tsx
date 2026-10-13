@@ -280,3 +280,58 @@ describe("decision-first review", () => {
     expect(screen.queryByText(/claims proved/)).toBeNull();
   });
 });
+
+describe("opening a repository by path", () => {
+  const openDeferred = (): (() => void) => {
+    let release = (): void => undefined;
+    const opened = new Promise<void>((done) => { release = done; });
+    const answer = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    vi.stubGlobal("fetch", vi.fn((url: string) => url === "/api/projects/open" ? opened.then(() => answer(project)) : Promise.resolve(answer(url === "/api/runtime" ? runtime : []))));
+    window.history.replaceState(null, "", "/?repository=%2Ftmp%2Frepository");
+    return release;
+  };
+  afterEach(() => { window.history.replaceState(null, "", "/"); });
+
+  it("lands on the overview once the repository is open", async () => {
+    const release = openDeferred();
+    render(<App />);
+    release();
+    await screen.findByText("auth-repository");
+    expect(screen.getByRole("button", { name: "Overview" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByRole("region", { name: "Conclave composer" })).toBeNull();
+  });
+
+  it("shows why a repository could not be opened and opens it on retry", async () => {
+    let attempts = 0;
+    const answer = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (url !== "/api/projects/open") return Promise.resolve(answer(url === "/api/runtime" ? runtime : []));
+      attempts += 1;
+      return Promise.resolve(attempts === 1 ? answer({ error: { code: "path_not_allowed", message: "This local server only opens folders beneath its configured allowed root.", action: "Choose another folder." } }, 400) : answer(project));
+    }));
+    window.history.replaceState(null, "", "/?repository=%2Ftmp%2Frepository");
+    render(<App />);
+
+    const failure = await screen.findByRole("alert", { name: "Repository could not be opened" });
+    expect(failure.textContent).toContain("only opens folders beneath its configured allowed root");
+    expect(screen.queryByText("Opening repository…")).toBeNull();
+    expect(screen.queryByText("Opening project…")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Conclave composer" })).toBeNull();
+
+    fireEvent.click(within(failure).getByRole("button", { name: "Try again" }));
+    await screen.findByText("auth-repository");
+    expect(attempts).toBe(2);
+    expect(screen.queryByRole("alert", { name: "Repository could not be opened" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Overview" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("keeps the screen the user chose while the repository was still opening", async () => {
+    const release = openDeferred();
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    release();
+    await screen.findByText("auth-repository");
+    expect(screen.getByRole("button", { name: "Review" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("region", { name: "Conclave composer" })).toBeTruthy();
+  });
+});
