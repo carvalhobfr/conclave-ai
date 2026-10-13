@@ -79,3 +79,15 @@ export function reasoningStyle(id: string | undefined): ReasoningStyle {
   }
   return selected;
 }
+
+/** Models offered for subscription CLIs, which expose no model listing endpoint. Any model name still works. */
+export function cliLoginModels(provider: string): readonly string[] {
+  switch (provider) {
+    case "claude-cli":
+      return ["sonnet", "opus", "haiku"];
+    case "codex-cli":
+      return ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"];
+    default:
+      return [];
+  }
+}

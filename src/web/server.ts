@@ -4,6 +4,8 @@ import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadConclaveEnvironment } from "../config/environment-file.js";
+import { CLI_LOGIN_PROVIDERS } from "../config/runtime-config.js";
+import type { ProviderId } from "../domain/provider.js";
 import { FINDING_DISPOSITIONS, FINDING_LIFECYCLE_STATES } from "../domain/finding-ledger.js";
 import { PROPOSAL_STATUSES } from "../domain/issue-proposal.js";
 import type { ChangeSource } from "../domain/validation.js";
@@ -13,7 +15,7 @@ import { AUDIT_MODES, REASONING_ROLE_NAMES, type AuditStartRequest, type Configu
 import { ConclaveProductService, ProductServiceError } from "./product-service.js";
 
 const BODY_LIMIT_BYTES = 64_000;
-const CONFIGURABLE_PROVIDERS = new Set<ConfigurableProviderId>(["openai", "openrouter", "anthropic", "opencode-go", "opencode-zen", "ollama", "lm-studio", "openai-compatible"]);
+const CONFIGURABLE_PROVIDERS = new Set<ConfigurableProviderId>(["openai", "openrouter", "anthropic", "opencode-go", "opencode-zen", "ollama", "lm-studio", "openai-compatible", "claude-cli", "codex-cli"]);
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -50,6 +52,12 @@ async function body(request: IncomingMessage): Promise<Record<string, unknown>> 
 function string(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim() === "") throw new ProductServiceError("invalid_request", `${label} is required.`, "Provide the missing value.");
   return value;
+}
+
+/** Subscription CLIs have no endpoint, so an empty one is valid for them only. */
+function endpoint(provider: string, value: unknown): string {
+  if (CLI_LOGIN_PROVIDERS.has(provider as ProviderId)) return typeof value === "string" ? value : "";
+  return string(value, "Provider endpoint");
 }
 
 function optionalString(value: unknown, label: string): string | undefined {
@@ -141,7 +149,7 @@ function runtimeConfiguration(payload: Record<string, unknown>): RuntimeConfigur
     mode,
     provider: provider as ConfigurableProviderId,
     model: string(payload["model"], "Model"),
-    baseUrl: string(payload["baseUrl"], "Provider endpoint"),
+    baseUrl: endpoint(provider, payload["baseUrl"]),
     reasoningPreset,
     ...(rawApiKey === undefined ? {} : { apiKey: rawApiKey }),
     ...roleModelOptions(payload),
@@ -206,7 +214,7 @@ function runtimeModelDiscovery(payload: Record<string, unknown>): RuntimeModelDi
   return {
     mode,
     provider: provider as ConfigurableProviderId,
-    baseUrl: string(payload["baseUrl"], "Provider endpoint"),
+    baseUrl: endpoint(provider, payload["baseUrl"]),
     ...(rawApiKey === undefined ? {} : { apiKey: rawApiKey }),
   };
 }

@@ -5,6 +5,8 @@ export type ProviderId =
   | "gemini"
   | "opencode-go"
   | "opencode-zen"
+  | "claude-cli"
+  | "codex-cli"
   | "ollama"
   | "lm-studio"
   | "openai-compatible"

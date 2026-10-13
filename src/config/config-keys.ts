@@ -27,7 +27,7 @@ export const PRIMARY_CONFIG_KEYS = [
 const VALID_VALUES: Readonly<Record<string, readonly string[]>> = {
   CONCLAVE_MODE: ["api", "local", "free"],
   CONCLAVE_REASONING_PRESET: ["full", "free-like", "local"],
-  CONCLAVE_PROVIDER: ["openai", "openrouter", "anthropic", "opencode-go", "opencode-zen", "ollama", "lm-studio", "openai-compatible"],
+  CONCLAVE_PROVIDER: ["openai", "openrouter", "anthropic", "opencode-go", "opencode-zen", "ollama", "lm-studio", "openai-compatible", "claude-cli", "codex-cli"],
 };
 
 export function resolveConfigKey(name: string): string {
