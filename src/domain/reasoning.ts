@@ -2,6 +2,7 @@ import type { GraphEdge } from "./code-index.js";
 import type { ContextBundle } from "./context-bundle.js";
 import type { Evidence } from "./evidence.js";
 import type { PlannedRetrieval } from "./retrieval-plan.js";
+import type { ModelContextProtection } from "../security/model-context.js";
 
 export type AgentRole = "investigator" | "skeptic" | "architect" | "verifier" | "judge";
 
@@ -24,6 +25,8 @@ export interface ReasoningChangeContext {
   readonly hunks: readonly ReasoningChangeHunk[];
   /** Deterministic review dimensions selected from the diff, not defect descriptions. */
   readonly reviewDimensions: readonly string[];
+  /** What was redacted or withheld from `hunks` when they were collected. */
+  readonly protection?: ModelContextProtection;
 }
 
 export interface AgentAssignment {
@@ -158,6 +161,7 @@ export const DEFAULT_REASONING_LIMITS: ReasoningLimits = {
 
 export type ReasoningTraceEventType =
   | "reasoning_started"
+  | "context_protected"
   | "agent_selected"
   | "agent_skipped"
   | "agent_started"
@@ -254,4 +258,10 @@ export interface ReasoningResult {
   readonly trace: readonly ReasoningTraceEvent[];
   readonly metrics: ReasoningMetrics;
   readonly terminationReason: "completed" | "budget-exhausted" | "no-progress" | "agent-failure";
+  /**
+   * Repository context that was redacted or withheld before any provider call. A non-empty
+   * record is a coverage limitation: the model reasoned without that content. Paths and
+   * categories only. Absent on results produced before this was recorded.
+   */
+  readonly contextProtection?: ModelContextProtection;
 }

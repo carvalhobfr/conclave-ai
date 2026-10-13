@@ -1,8 +1,18 @@
 import { listFindingFeedback, recordFindingFeedback } from "../storage/finding-feedback.js";
+import type { FindingDisposition, TriageActor } from "../domain/finding-ledger.js";
+import { ProposalError, type ProposalEdit } from "../validation/issue-proposal.js";
+import { TriageError, TriageService, type FindingFilter, type ProposalFilter } from "../workflow/triage-service.js";
 import { loadAcceptanceContract, saveAcceptanceContract } from "../storage/acceptance-contract.js";
 import { parseEvidenceReceiptEnvelope } from "../validation/evidence-receipts.js";
+import { randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
+
+import { AUDIT_DIRECTORY, AUDIT_LATEST_FILENAME, auditRepositoryWithLedger, SEMANTIC_CACHE_FILENAME } from "../analysis/repository-audit.js";
+import { parseSemanticCache } from "../analysis/semantic-discovery.js";
+import { resolveSemanticSetup } from "../analysis/semantic-setup.js";
+import type { AuditReport } from "../domain/audit.js";
+import { existingStateDirectory, readStateFile } from "../storage/state-file.js";
 
 import { MultiLanguageCodeParser } from "../code-intelligence/multi-language-parser.js";
 import type { RepositoryCodeIndex } from "../domain/code-index.js";
@@ -37,6 +47,11 @@ import { listReviewHistory, saveReviewHistory } from "../storage/review-history.
 import { inferredReviewObjective, inspectRepository } from "../workflow/repository-inspector.js";
 import { createDemoReasoningEngine } from "./demo-runtime.js";
 import type {
+  ArchitectureView,
+  AuditJobView,
+  AuditMode,
+  AuditPreflightView,
+  AuditStartRequest,
   ClaimView,
   EvidenceView,
   GraphView,
@@ -62,6 +77,18 @@ interface ProjectSession {
   readonly index: RepositoryCodeIndex;
   readonly retrieval: CodeRetrievalService;
   readonly reasoning?: ReasoningEngine;
+}
+
+const COCKPIT_ACTOR: TriageActor = { kind: "api", name: "cockpit" };
+const JOB_PROGRESS_LINES = 60;
+const ARCHITECTURE_MODULES = 40;
+const ARCHITECTURE_DEPENDENCIES = 80;
+const ARCHITECTURE_HUBS = 15;
+
+/** The directory a file belongs to for the architecture view: its first two path segments. */
+function moduleOf(path: string): string {
+  const segments = path.split("/");
+  return segments.length <= 1 ? "(root)" : segments.slice(0, Math.min(2, segments.length - 1)).join("/");
 }
 
 export class ProductServiceError extends Error {
@@ -273,6 +300,7 @@ function validationView(report: ValidationReport, patch: string, demo: boolean):
 
 export class ConclaveProductService {
   readonly #sessions = new Map<string, ProjectSession>();
+  readonly #auditJobs = new Map<string, AuditJobView>();
   readonly #demoRoot: string;
   readonly #allowedRoot: string;
   readonly #environment: NodeJS.ProcessEnv;
@@ -322,6 +350,162 @@ export class ConclaveProductService {
     if (report === undefined) throw new Error("Select a saved review before recording feedback");
     return recordFindingFeedback(session.root, report, value);
   }
+
+  /**
+   * The audit triage workflow for an opened local repository. Every failure the workflow itself
+   * raises is a request problem with a message meant for the person, so it is surfaced as such.
+   */
+  async #triage<T>(id: string, action: (service: TriageService) => Promise<T>): Promise<T> {
+    const session = this.#session(id);
+    if (session.source === "demo") throw new ProductServiceError("triage_unavailable", "Findings and issue proposals are available for local repositories.", "Open a local repository.");
+    try {
+      return await action(await TriageService.open(session.root));
+    } catch (error) {
+      if (error instanceof TriageError || error instanceof ProposalError) throw new ProductServiceError(error.code, error.message, "Check the finding or proposal and try again.");
+      throw error;
+    }
+  }
+
+  #localSession(id: string): ProjectSession {
+    const session = this.#session(id);
+    if (session.source === "demo") throw new ProductServiceError("audit_unavailable", "Repository audits are available for local repositories.", "Open a local repository.");
+    return session;
+  }
+
+  /** The report of the last audit that was allowed to write, or `null` when there is none. */
+  public async latestAudit(id: string): Promise<AuditReport | null> {
+    const directory = await existingStateDirectory(this.#localSession(id).root, AUDIT_DIRECTORY);
+    if (directory === undefined) return null;
+    const saved = await readStateFile(join(directory, AUDIT_LATEST_FILENAME)).catch(() => undefined);
+    const value = saved?.value as Partial<AuditReport> | undefined;
+    return value?.kind === "repository-audit" && value.schemaVersion === 1 ? value as AuditReport : null;
+  }
+
+  /** What an audit in this mode would call and send. Reads configuration only; calls no model. */
+  public async auditPreflight(id: string, mode: AuditMode, request: Pick<AuditStartRequest, "budget" | "discoveryModel" | "verifierModel"> = {}): Promise<AuditPreflightView> {
+    const session = this.#localSession(id);
+    const directory = await existingStateDirectory(session.root, AUDIT_DIRECTORY);
+    const cache = directory === undefined ? undefined : parseSemanticCache((await readStateFile(join(directory, SEMANTIC_CACHE_FILENAME)).catch(() => undefined))?.value);
+    const cachedRegions = Object.keys(cache?.discoveries ?? {}).length;
+    if (mode === "static") return { mode, available: true, cachedRegions };
+    try {
+      const { disclosure } = resolveSemanticSetup({ budget: request.budget ?? {}, deep: mode === "deep", ...(request.discoveryModel === undefined ? {} : { discoveryModel: request.discoveryModel }), ...(request.verifierModel === undefined ? {} : { verifierModel: request.verifierModel }) }, this.#environment);
+      return { mode, available: true, disclosure, cachedRegions };
+    } catch (error) {
+      // Configuration errors name variables and providers, never credential values.
+      return { mode, available: false, reason: error instanceof Error ? error.message : "No model provider is configured.", cachedRegions };
+    }
+  }
+
+  public auditStatus(id: string): AuditJobView | null {
+    this.#localSession(id);
+    return this.#auditJobs.get(id) ?? null;
+  }
+
+  /**
+   * Starts one audit and returns at once; `auditStatus` reports on it. A semantic mode is
+   * refused without the explicit acknowledgement, so no request shape can start model calls by
+   * omission. The audit itself is the same one the CLI runs and writes the same local state.
+   */
+  public startAudit(id: string, request: Omit<AuditStartRequest, "projectId">): AuditJobView {
+    const session = this.#localSession(id);
+    if (this.#auditJobs.get(id)?.state === "running") throw new ProductServiceError("audit_running", "An audit of this repository is already running.", "Wait for it to finish.");
+    const semantic = request.mode === "static" ? undefined : (() => {
+      if (request.acknowledgedModelCalls !== true) throw new ProductServiceError("acknowledgement_required", "A semantic audit calls a model and sends it sanitized source.", "Read the disclosure and confirm before starting.");
+      try {
+        return resolveSemanticSetup({ budget: request.budget ?? {}, deep: request.mode === "deep", ...(request.discoveryModel === undefined ? {} : { discoveryModel: request.discoveryModel }), ...(request.verifierModel === undefined ? {} : { verifierModel: request.verifierModel }) }, this.#environment).options;
+      } catch (error) {
+        throw new ProductServiceError("provider_unavailable", error instanceof Error ? error.message : "No model provider is configured.", "Configure a provider in Settings.");
+      }
+    })();
+    const started: AuditJobView = { id: randomUUID(), mode: request.mode, state: "running", startedAt: new Date().toISOString(), progress: [] };
+    this.#auditJobs.set(id, started);
+    const update = (change: Partial<AuditJobView>): void => {
+      const current = this.#auditJobs.get(id);
+      if (current?.id === started.id) this.#auditJobs.set(id, { ...current, ...change });
+    };
+    const progress = (line: string): void => update({ progress: [...(this.#auditJobs.get(id)?.progress ?? []), line].slice(-JOB_PROGRESS_LINES) });
+    progress(request.mode === "static" ? "Indexing and running rules" : "Indexing, running rules, then calling the model");
+    void auditRepositoryWithLedger(session.root, { write: true, ...(semantic === undefined ? {} : { semantic: { ...semantic, onProgress: progress } }) })
+      .then(() => update({ state: "completed", finishedAt: new Date().toISOString() }))
+      .catch((error: unknown) => update({ state: "failed", finishedAt: new Date().toISOString(), error: error instanceof Error ? error.message.slice(0, 500) : "The audit could not run." }));
+    return started;
+  }
+
+  /** Structure of the opened repository, from the index built when it was opened. Deterministic. */
+  public architecture(id: string): ArchitectureView {
+    const { index } = this.#session(id);
+    const pathOf = (node: { readonly kind: string; readonly id: string }): string | undefined => node.kind === "file" ? node.id : index.units[node.id]?.path;
+    const languages = new Map<string, number>();
+    const modules = new Map<string, { files: number; symbols: number; dependsOn: Set<string>; usedBy: Set<string> }>();
+    const moduleEntry = (name: string) => {
+      const existing = modules.get(name);
+      if (existing !== undefined) return existing;
+      const created = { files: 0, symbols: 0, dependsOn: new Set<string>(), usedBy: new Set<string>() };
+      modules.set(name, created);
+      return created;
+    };
+    for (const file of Object.values(index.files)) {
+      languages.set(file.language, (languages.get(file.language) ?? 0) + 1);
+      const entry = moduleEntry(moduleOf(file.path));
+      entry.files += 1;
+      entry.symbols += file.symbolIds.length;
+    }
+    const dependencies = new Map<string, number>();
+    const hubs = new Map<string, { incoming: number; outgoing: number }>();
+    for (const edge of index.graphEdges) {
+      const [from, to] = [pathOf(edge.from), pathOf(edge.to)];
+      if (from === undefined || to === undefined || from === to) continue;
+      const [source, target] = [hubs.get(from) ?? { incoming: 0, outgoing: 0 }, hubs.get(to) ?? { incoming: 0, outgoing: 0 }];
+      hubs.set(from, { ...source, outgoing: source.outgoing + 1 });
+      hubs.set(to, { ...target, incoming: target.incoming + 1 });
+      const [fromModule, toModule] = [moduleOf(from), moduleOf(to)];
+      if (fromModule === toModule) continue;
+      dependencies.set(`${fromModule}\0${toModule}`, (dependencies.get(`${fromModule}\0${toModule}`) ?? 0) + 1);
+      moduleEntry(fromModule).dependsOn.add(toModule);
+      moduleEntry(toModule).usedBy.add(fromModule);
+    }
+    const notIndexed = new Map<string, number>();
+    for (const gap of index.coverage?.gaps ?? []) notIndexed.set(gap.reason, (notIndexed.get(gap.reason) ?? 0) + 1);
+    const moduleList = [...modules].map(([name, entry]) => ({ name, files: entry.files, symbols: entry.symbols, dependsOn: entry.dependsOn.size, usedBy: entry.usedBy.size }))
+      .sort((left, right) => right.usedBy + right.dependsOn - (left.usedBy + left.dependsOn) || right.files - left.files || left.name.localeCompare(right.name));
+    const dependencyList = [...dependencies].map(([key, relations]) => { const [from = "", to = ""] = key.split("\0"); return { from, to, relations }; })
+      .sort((left, right) => right.relations - left.relations || left.from.localeCompare(right.from) || left.to.localeCompare(right.to));
+    return {
+      files: Object.keys(index.files).length,
+      symbols: Object.keys(index.units).length,
+      relations: index.graphEdges.length,
+      languages: [...languages].map(([language, files]) => ({ language, files })).sort((left, right) => right.files - left.files || left.language.localeCompare(right.language)),
+      modules: moduleList.slice(0, ARCHITECTURE_MODULES),
+      dependencies: dependencyList.slice(0, ARCHITECTURE_DEPENDENCIES),
+      hubs: [...hubs].map(([path, degree]) => ({ path, ...degree })).sort((left, right) => right.incoming + right.outgoing - (left.incoming + left.outgoing) || left.path.localeCompare(right.path)).slice(0, ARCHITECTURE_HUBS),
+      notIndexed: [...notIndexed].map(([reason, entries]) => ({ reason, entries })).sort((left, right) => right.entries - left.entries),
+      omitted: { modules: Math.max(0, moduleList.length - ARCHITECTURE_MODULES), dependencies: Math.max(0, dependencyList.length - ARCHITECTURE_DEPENDENCIES) },
+    };
+  }
+
+  public async auditRuns(id: string) { return this.#triage(id, (service) => service.listAuditRuns()); }
+  public async findings(id: string, filter: FindingFilter) { return this.#triage(id, (service) => service.listFindings(filter)); }
+  public async finding(id: string, reference: string) {
+    return this.#triage(id, async (service) => ({ ...(await service.getFinding(reference)), source: await service.readFindingEvidence(reference) }));
+  }
+  public async classifyFinding(id: string, reference: string, classification: FindingDisposition, note: string | undefined) {
+    return this.#triage(id, (service) => service.classifyFinding(reference, { classification, ...(note === undefined ? {} : { note }), actor: COCKPIT_ACTOR }));
+  }
+  public async issueProposals(id: string, filter: ProposalFilter) { return this.#triage(id, (service) => service.listProposals(filter)); }
+  public async issueProposal(id: string, reference: string) { return this.#triage(id, (service) => service.getProposal(reference)); }
+  public async proposeIssue(id: string, findingReference: string, reason: string | undefined) {
+    return this.#triage(id, (service) => service.createProposal(findingReference, { actor: COCKPIT_ACTOR, ...(reason === undefined ? {} : { reason }) }));
+  }
+  public async editIssueProposal(id: string, reference: string, edit: ProposalEdit) { return this.#triage(id, (service) => service.editProposal(reference, edit, COCKPIT_ACTOR)); }
+  public async submitIssueProposal(id: string, reference: string) { return this.#triage(id, (service) => service.submitProposal(reference, COCKPIT_ACTOR)); }
+  /** `revision` is the one the person was shown; a proposal edited since then is not approved by this call. */
+  public async approveIssueProposal(id: string, reference: string, revision: string) {
+    return this.#triage(id, (service) => service.approveProposal(reference, { revision, actor: COCKPIT_ACTOR, method: "api-revision" }));
+  }
+  public async rejectIssueProposal(id: string, reference: string, reason: string) { return this.#triage(id, (service) => service.rejectProposal(reference, { reason, actor: COCKPIT_ACTOR })); }
+  public async markIssueProposalReady(id: string, reference: string) { return this.#triage(id, (service) => service.markProposalReady(reference, COCKPIT_ACTOR)); }
+  public async refreshIssueProposal(id: string, reference: string) { return this.#triage(id, (service) => service.refreshProposal(reference, COCKPIT_ACTOR)); }
 
   public async acceptance(id: string) {
     const session = this.#session(id);

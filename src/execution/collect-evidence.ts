@@ -5,8 +5,16 @@ import { resolve } from "node:path";
 import type { EvidenceReceiptInput, EvidenceReceiptType, ValidationReport } from "../domain/validation.js";
 import { GitChangeSetService } from "../validation/git-change-set.js";
 import { validationDigest } from "../validation/review-lineage.js";
+import { createChildEnvironment, parseForwardedVariables } from "./child-environment.js";
 
 interface ExecutionCheck { readonly id: string; readonly type: EvidenceReceiptType; readonly argv: readonly string[]; readonly timeoutMs: number; readonly criterionIds: readonly string[] }
+
+export interface ExecutionOptions {
+  /** Variable names the operator passes through in addition to the built-in allowlist. */
+  readonly forwardEnvironment?: readonly string[];
+  /** The environment to select from; defaults to this process. */
+  readonly environment?: NodeJS.ProcessEnv;
+}
 
 export function parseExecutionPlan(value: unknown): readonly ExecutionCheck[] {
   const plan = value as { version?: unknown; checks?: unknown } | null;
@@ -21,15 +29,22 @@ export function parseExecutionPlan(value: unknown): readonly ExecutionCheck[] {
   return checks;
 }
 
-export async function executeCheck(check: ExecutionCheck, root: string): Promise<{ exitCode: number; outputDigest: string; summary: string }> {
+export async function executeCheck(check: ExecutionCheck, root: string, options: ExecutionOptions = {}): Promise<{ exitCode: number; outputDigest: string; summary: string }> {
+  // The command never inherits this process's environment: it holds the provider credentials
+  // the CLI loaded at startup. Scrubbing bounds what the command reads from its environment;
+  // it is not a sandbox, and the command still runs with the user's file and network access.
+  const env = createChildEnvironment({
+    forward: options.forwardEnvironment ?? [],
+    ...(options.environment === undefined ? {} : { parent: options.environment }),
+  });
   return new Promise((done) => {
     const hash = createHash("sha256");
     let bytes = 0; let failure = "";
-    const child = spawn(check.argv[0] ?? "", [...check.argv.slice(1)], { cwd: root, shell: false, stdio: ["ignore", "pipe", "pipe"], windowsHide: true, detached: process.platform !== "win32" });
+    const child = spawn(check.argv[0] ?? "", [...check.argv.slice(1)], { cwd: root, env, shell: false, stdio: ["ignore", "pipe", "pipe"], windowsHide: true, detached: process.platform !== "win32" });
     const stop = () => {
       if (child.pid === undefined) return;
       if (process.platform === "win32") {
-        const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+        const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { env, stdio: "ignore", windowsHide: true });
         killer.on("error", () => { child.kill(); });
       } else { try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); } }
     };
@@ -56,28 +71,60 @@ export async function assertReviewedArtifact(root: string, report: ValidationRep
     }
 }
 
-export async function collectExecutionEvidence(root: string, report: ValidationReport, planValue: unknown): Promise<readonly EvidenceReceiptInput[]> {
+export async function collectExecutionEvidence(root: string, report: ValidationReport, planValue: unknown, options: ExecutionOptions = {}): Promise<readonly EvidenceReceiptInput[]> {
   const checks = parseExecutionPlan(planValue);
+  // Rejected before anything runs, so a bad name cannot leave a half-executed plan behind.
+  const forwarded = parseForwardedVariables(options.forwardEnvironment ?? []);
   const criteria = new Map((report.criteria ?? []).map((item) => [item.criterion.id, item]));
   for (const check of checks) for (const id of check.criterionIds) if (!criteria.has(id)) throw new Error("Unknown criterion: " + id);
   await assertReviewedArtifact(root, report);
   const receipts: EvidenceReceiptInput[] = [];
   for (const check of checks) {
     const startedAt = new Date().toISOString();
-    const result = await executeCheck(check, resolve(root));
+    const result = await executeCheck(check, resolve(root), { ...options, forwardEnvironment: forwarded });
     const finishedAt = new Date().toISOString();
     await assertReviewedArtifact(root, report);
-    receipts.push({ id: check.id, type: check.type, command: JSON.stringify(check.argv), startedAt, finishedAt, headSha: report.changeSet.headSha, diffDigest: report.lineage.diffDigest, runner: "conclave-opt-in-runner", claimedTrustLevel: "locally-observed", criterionDigests: Object.fromEntries(check.criterionIds.map((id) => [id, criteria.get(id)?.digest ?? ""])), ...result });
+    // The receipt names what was forwarded, never the values, so the run can be reproduced.
+    const summary = forwarded.length === 0 ? result.summary : `${result.summary} Forwarded environment variables: ${forwarded.join(", ")}.`;
+    receipts.push({ id: check.id, type: check.type, command: JSON.stringify(check.argv), startedAt, finishedAt, headSha: report.changeSet.headSha, diffDigest: report.lineage.diffDigest, runner: "conclave-opt-in-runner", claimedTrustLevel: "locally-observed", criterionDigests: Object.fromEntries(check.criterionIds.map((id) => [id, criteria.get(id)?.digest ?? ""])), ...result, summary });
   }
   return receipts;
 }
 
+const COLLECT_USAGE = "Usage: conclave collect REPOSITORY REPORT.json PLAN.json OUTPUT.json [--forward-env NAME]... (executes the explicit plan)";
+
+/**
+ * Splits `--forward-env NAME` from the positional arguments. Forwarding is decided on the
+ * command line by whoever runs the plan; a plan file or a repository `.env` cannot request it.
+ */
+export function parseCollectArguments(args: readonly string[]): { readonly positionals: readonly string[]; readonly forwardEnvironment: readonly string[] } {
+  const positionals: string[] = [];
+  const names: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index] ?? "";
+    if (argument === "--forward-env") {
+      const name = args[index + 1];
+      if (name === undefined) throw new Error("--forward-env requires a variable name");
+      names.push(name);
+      index += 1;
+    } else if (argument.startsWith("--forward-env=")) {
+      names.push(argument.slice("--forward-env=".length));
+    } else if (argument.startsWith("--")) {
+      throw new Error(`Unknown collect option: ${argument}. ${COLLECT_USAGE}`);
+    } else {
+      positionals.push(argument);
+    }
+  }
+  return { positionals, forwardEnvironment: parseForwardedVariables(names) };
+}
+
 export async function collectCommand(args: readonly string[]): Promise<void> {
-  if (args.length !== 4) throw new Error("Usage: conclave collect REPOSITORY REPORT.json PLAN.json OUTPUT.json (executes the explicit plan)");
-  const [root, reportPath, planPath, output] = args as readonly [string, string, string, string];
+  const { positionals, forwardEnvironment } = parseCollectArguments(args);
+  if (positionals.length !== 4) throw new Error(COLLECT_USAGE);
+  const [root, reportPath, planPath, output] = positionals as readonly [string, string, string, string];
   const reportValue = JSON.parse(await readFile(reportPath, "utf8")) as ValidationReport | { report: ValidationReport };
   const report = "report" in reportValue ? reportValue.report : reportValue;
-  const receipts = await collectExecutionEvidence(root, report, JSON.parse(await readFile(planPath, "utf8")));
+  const receipts = await collectExecutionEvidence(root, report, JSON.parse(await readFile(planPath, "utf8")), { forwardEnvironment });
   await writeFile(output, JSON.stringify({ version: 1, receipts }, null, 2) + "\n", { flag: "wx", mode: 0o600 });
   if (receipts.some((item) => item.exitCode !== 0)) process.exitCode = 1;
 }

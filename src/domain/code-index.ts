@@ -103,6 +103,36 @@ export interface GraphEdge {
   readonly provenance: GraphEdgeProvenance;
 }
 
+export type CoverageGapReason =
+  /** File name matches a built-in credential pattern; never read. */
+  | "safety-excluded-path"
+  /** Content matched a credential or private-key detector; read locally, never indexed. */
+  | "safety-excluded-content"
+  /** `.gitignore`, `.conclaveignore`, or a built-in build-output rule. */
+  | "ignored"
+  /** No structural parser exists for this file type. */
+  | "unsupported-language"
+  /** The parser threw; nothing about the file is known. */
+  | "parser-failure"
+  | "binary"
+  | "oversized"
+  | "symlink"
+  | "unreadable";
+
+/** A repository entry that exists but is absent from the index. Never carries file content. */
+export interface CoverageGap {
+  /** Repository-relative path; an ignored directory is one entry ending in `/`. */
+  readonly path: string;
+  readonly reason: CoverageGapReason;
+  /** Detector categories for a content exclusion, e.g. `credential`. */
+  readonly detail?: string;
+}
+
+export interface IndexCoverage {
+  /** Sorted by path. */
+  readonly gaps: readonly CoverageGap[];
+}
+
 export interface RepositoryCodeIndex {
   readonly schemaVersion: number;
   readonly indexingVersion: number;
@@ -113,6 +143,11 @@ export interface RepositoryCodeIndex {
   readonly units: Readonly<Record<string, IndexedCodeUnit>>;
   readonly embeddingCache: Readonly<Record<string, readonly number[]>>;
   readonly graphEdges: readonly GraphEdge[];
+  /**
+   * What the index does not contain, and why. Absent on an index built before coverage was
+   * recorded or assembled by hand; absence means unknown, not complete.
+   */
+  readonly coverage?: IndexCoverage;
   readonly createdAt: string;
   readonly updatedAt: string;
 }

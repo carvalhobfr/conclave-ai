@@ -38,7 +38,13 @@ Rebaseline-required reports are `INCONCLUSIVE`. Conclave never silently weakens 
 
 ## Finding lifecycle
 
-Each finding has a stable fingerprint based on its kind, normalized detail, and evidence identity rather than volatile line numbers. Across a verified lineage, findings can be new, persistent, resolved, or regressed. The report-level progress is one of `initial`, `duplicate-recheck`, `progress`, `stagnant`, `regression`, or `mixed`.
+Each finding has a stable fingerprint based on its kind, normalized detail, and evidence identity rather than volatile line numbers. A finding that points at one source location (a parser diagnostic, an unreleased resource, a discarded error, an inconsistent key) is also anchored to its innermost enclosing symbol and to the text of the flagged line with whitespace collapsed, so two defects of one kind in one file have different fingerprints and inserting unrelated lines changes neither. Statements that are still identical inside one symbol are told apart by source order. Every fingerprint is unique within a report, and `id` is derived from it: `fingerprint` is the identity that lineage and feedback follow across reviews, `id` is the handle other parts of the same report use.
+
+Editing the flagged line itself, or renaming the symbol around it, gives the finding a new fingerprint. When one of several identical statements is removed, exactly one resolution is reported, but which of the identical statements it is attributed to follows source order.
+
+Reports written before anchors existed identify these findings by a coarser fingerprint that two defects could share. A review that continues from such a report follows the older fingerprint, so the finding stays `persistent` instead of appearing as resolved and reintroduced; no rebaseline is needed. The mapping is one-to-one: when several current findings share one older fingerprint, only the first in source order inherits its history and the others are `new`, because the older report never tracked them separately.
+
+Across a verified lineage, findings can be new, persistent, resolved, or regressed. The report-level progress is one of `initial`, `duplicate-recheck`, `progress`, `stagnant`, `regression`, or `mixed`.
 
 An identical diff is a duplicate recheck and does not advance the stagnation counter. Stagnation means the same findings survived the configured number of changed-artifact iterations.
 

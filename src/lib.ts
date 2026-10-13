@@ -1,5 +1,7 @@
 // Small public API: review a change, ask about a repository, hand findings back to an agent.
 // Everything else in `src/` is internal. Provider settings come from process.env (same keys as the CLI).
+import { auditRepository } from "./analysis/repository-audit.js";
+import type { AuditReport } from "./domain/audit.js";
 import { resolve } from "node:path";
 import { MultiLanguageCodeParser } from "./code-intelligence/multi-language-parser.js";
 import { loadReasoningConfiguration } from "./config/reasoning-config.js";
@@ -25,6 +27,7 @@ import { SuperValidator } from "./validation/super-validator.js";
 import { inferredReviewObjective, inspectRepository } from "./workflow/repository-inspector.js";
 
 export type { PullRequestSummary, ReviewHandoff, ValidationReport, ChangeSource, ReasoningResult };
+export type { AuditFinding, AuditReport } from "./domain/audit.js";
 
 export interface CheckOptions {
   /** Repository folder. Defaults to the current directory. */
@@ -67,6 +70,14 @@ export async function check(options: CheckOptions = {}): Promise<CheckResult> {
   } finally {
     await materialized.cleanup();
   }
+}
+
+/**
+ * Deterministic audit of a whole repository as it is on disk. Makes no model call, runs no
+ * repository code and writes nothing unless `write` is set.
+ */
+export async function audit(options: { readonly repository?: string; readonly write?: boolean } = {}): Promise<AuditReport> {
+  return auditRepository(resolve(options.repository ?? "."), { write: options.write === true });
 }
 
 /** Correction request for a coding agent, derived from a report. */

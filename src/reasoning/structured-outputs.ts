@@ -1,3 +1,4 @@
+import type { HypothesisConfidence, HypothesisDefectClass, HypothesisTriggerKind } from "../domain/audit.js";
 import type {
   ChallengeType,
   ClaimCheck,
@@ -82,6 +83,12 @@ function parseObject(raw: string, label: string): Record<string, unknown> {
   }
   if (!isRecord(parsed)) {
     throw new StructuredOutputError(`${label} output must be a JSON object`);
+  }
+  // Models in JSON-object mode sometimes echo the request's response format as a top-level
+  // `"type":"json_object"` beside an otherwise valid answer. That echo carries nothing, so it is
+  // dropped instead of costing a repair call or the role. Every other unknown field still fails.
+  if (parsed["type"] === "json_object" || parsed["type"] === "json_schema") {
+    return Object.fromEntries(Object.entries(parsed).filter(([key]) => key !== "type"));
   }
   return parsed;
 }
@@ -403,4 +410,60 @@ export function parseJudgeOutput(raw: string, claimIds: ReadonlySet<string>): Ju
       };
     }),
   };
+}
+
+export interface DiscoveryHypothesisOutput {
+  readonly title: string;
+  readonly defectClass: HypothesisDefectClass;
+  readonly severity: "high" | "medium" | "low";
+  readonly confidence: HypothesisConfidence;
+  readonly line: number;
+  readonly quote: string;
+  readonly trigger: string;
+  readonly consequence: string;
+  readonly suggestion?: string;
+  readonly triggerKind: HypothesisTriggerKind;
+  /** A shown line where a caller passes the triggering value; expected for `invalid-input`. */
+  readonly reachedBy?: string;
+}
+
+export interface DiscoveryOutput {
+  readonly hypotheses: readonly DiscoveryHypothesisOutput[];
+  readonly needsContext: readonly string[];
+}
+
+const DEFECT_CLASSES = new Set<HypothesisDefectClass>(["authorization", "logic", "boundary", "async", "fallback", "cache", "state", "resource", "error-handling", "contract", "other"]);
+const LEVELS = new Set(["high", "medium", "low"] as const);
+const TRIGGER_KINDS = new Set<HypothesisTriggerKind>(["normal-use", "invalid-input"]);
+
+/**
+ * Validates shape only. Whether a hypothesis points at real source is decided afterwards, by
+ * looking for its quote in the file. Optional fields a model gets wrong are dropped, not fatal.
+ */
+export function parseDiscoveryOutput(raw: string): DiscoveryOutput {
+  const output = parseObject(raw, "Discovery");
+  const hypotheses = array(output["hypotheses"], "Discovery hypotheses", 8).map((entry): DiscoveryHypothesisOutput => {
+    if (!isRecord(entry)) throw new StructuredOutputError("Discovery hypothesis must be an object");
+    const line = entry["line"];
+    if (typeof line !== "number" || !Number.isInteger(line) || line < 1) throw new StructuredOutputError("Discovery hypothesis line must be a positive integer");
+    const suggestion = typeof entry["suggestion"] === "string" && entry["suggestion"].trim() !== "" ? entry["suggestion"].trim().slice(0, 600) : undefined;
+    const reachedBy = typeof entry["reachedBy"] === "string" && entry["reachedBy"].trim() !== "" ? entry["reachedBy"].trim().slice(0, 400) : undefined;
+    return {
+      title: text(entry["title"], "Discovery hypothesis title", 200),
+      defectClass: DEFECT_CLASSES.has(entry["defectClass"] as HypothesisDefectClass) ? entry["defectClass"] as HypothesisDefectClass : "other",
+      severity: enumValue(entry["severity"], LEVELS, "Discovery hypothesis severity"),
+      confidence: enumValue(entry["confidence"], LEVELS, "Discovery hypothesis confidence"),
+      line,
+      quote: text(entry["quote"], "Discovery hypothesis quote", 400),
+      trigger: text(entry["trigger"], "Discovery hypothesis trigger", 600),
+      consequence: text(entry["consequence"], "Discovery hypothesis consequence", 600),
+      ...(suggestion === undefined ? {} : { suggestion }),
+      triggerKind: enumValue(entry["triggerKind"], TRIGGER_KINDS, "Discovery hypothesis triggerKind"),
+      ...(reachedBy === undefined ? {} : { reachedBy }),
+    };
+  });
+  const needsContext = Array.isArray(output["needsContext"])
+    ? output["needsContext"].filter((item): item is string => typeof item === "string" && item.trim() !== "" && item.length <= 300).map((item) => item.trim()).slice(0, 3)
+    : [];
+  return { hypotheses, needsContext };
 }

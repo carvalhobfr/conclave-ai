@@ -3,6 +3,22 @@ import { join } from "node:path";
 
 import createIgnore, { type Ignore } from "ignore";
 
+/**
+ * File names that conventionally hold credentials. They are never read. Kept apart from the
+ * structural defaults so an exclusion can be reported as a safety exclusion, not as build output.
+ */
+export const SENSITIVE_PATH_PATTERNS: readonly string[] = [
+  ".env",
+  ".env.*",
+  "!.env.example",
+  "*.pem",
+  "*.key",
+  "id_rsa*",
+  "id_ed25519*",
+  "credentials*.json",
+  "secrets*.json",
+];
+
 export const DEFAULT_IGNORE_PATTERNS: readonly string[] = [
   ".git/",
   ".hg/",
@@ -22,16 +38,18 @@ export const DEFAULT_IGNORE_PATTERNS: readonly string[] = [
   ".conclave/",
   "*.min.js",
   "*.map",
-  ".env",
-  ".env.*",
-  "!.env.example",
-  "*.pem",
-  "*.key",
-  "id_rsa*",
-  "id_ed25519*",
-  "credentials*.json",
-  "secrets*.json",
+  ...SENSITIVE_PATH_PATTERNS,
 ];
+
+const sensitivePaths = createIgnore().add(SENSITIVE_PATH_PATTERNS);
+
+/**
+ * Whether a path matches a built-in credential file-name pattern. This classifies an entry the
+ * repository matcher already ignored; it never decides on its own whether a file is read.
+ */
+export function isSensitivePath(relativePath: string): boolean {
+  return sensitivePaths.ignores(relativePath);
+}
 
 async function readOptionalIgnoreFile(rootPath: string, filename: string): Promise<string | undefined> {
   try {

@@ -1,4 +1,4 @@
-import type { ValidationChangedFile } from "../domain/validation.js";
+import type { AnalysisFile } from "../analysis/rule.js";
 import type { SourceDefect } from "./source-defects.js";
 
 // Python and Java get the same two review signals as TypeScript (swallowed errors and resources
@@ -17,13 +17,13 @@ const UNRELEASED = {
   remediation: "Check the resource lifetime and its matching teardown path. Add cleanup if required, or document the delegated or permanent lifetime.",
 } as const;
 
-function touches(file: ValidationChangedFile, start: number, end: number, includeDeletions = false): boolean {
-  if (file.status === "added") return true;
-  return file.hunks.some((hunk) =>
+function touches(file: AnalysisFile, start: number, end: number, includeDeletions = false): boolean {
+  if (file.changedRanges === undefined) return true;
+  return file.changedRanges.some((hunk) =>
     (hunk.newCount > 0 || includeDeletions) && start < hunk.newStart + Math.max(1, hunk.newCount) && end >= hunk.newStart);
 }
 
-function make(file: ValidationChangedFile, line: number, base: typeof DISCARDED_ERROR | typeof UNRELEASED, detail: string): SourceDefect {
+function make(file: AnalysisFile, line: number, base: typeof DISCARDED_ERROR | typeof UNRELEASED, detail: string): SourceDefect {
   return { ...base, detail, evidence: { path: file.path, startLine: line, endLine: line, reason: base.title } };
 }
 
@@ -37,7 +37,7 @@ function escapeRegExp(value: string): string {
 
 const PYTHON_RESOURCES = /^\s*([A-Za-z_][\w.]*)\s*=\s*((?:[\w.]+\.)?(?:open|connect|socket|Session|urlopen|TemporaryFile|NamedTemporaryFile|Popen))\s*\(/u;
 
-function analyzePython(file: ValidationChangedFile, text: string): SourceDefect[] {
+function analyzePython(file: AnalysisFile, text: string): SourceDefect[] {
   const defects: SourceDefect[] = [];
   const lines = text.split(/\r?\n/u);
   const meaningful = (line: string | undefined): boolean => line !== undefined && line.trim() !== "" && !line.trim().startsWith("#");
@@ -85,7 +85,7 @@ function lineAt(text: string, offset: number): number {
   return line;
 }
 
-function analyzeJava(file: ValidationChangedFile, text: string): SourceDefect[] {
+function analyzeJava(file: AnalysisFile, text: string): SourceDefect[] {
   const defects: SourceDefect[] = [];
   const emptyCatch = /\bcatch\s*\([^)]*\)\s*\{(?:\s|\/\/[^\n]*|\/\*[\s\S]*?\*\/)*\}/gu;
   for (const match of text.matchAll(emptyCatch)) {
@@ -111,7 +111,7 @@ function analyzeJava(file: ValidationChangedFile, text: string): SourceDefect[] 
 }
 
 /** Returns undefined for languages without textual rules so the caller can skip counting checks. */
-export function analyzeTextualSourceDefects(file: ValidationChangedFile, text: string): readonly SourceDefect[] | undefined {
+export function analyzeTextualSourceDefects(file: AnalysisFile, text: string): readonly SourceDefect[] | undefined {
   if (/\.py$/iu.test(file.path)) return analyzePython(file, text);
   if (/\.java$/iu.test(file.path)) return analyzeJava(file, text);
   return undefined;

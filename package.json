@@ -34,6 +34,9 @@
     "docs/assets",
     "docs/guides",
     "docs/review-lineage.md",
+    "docs/repository-audit.md",
+    "docs/finding-workflow.md",
+    "docs/semantic-discovery.md",
     "docs/security.md",
     "examples/github-actions",
     "schemas",
@@ -87,6 +90,7 @@
     "test:browser": "node scripts/test-browser.mjs",
     "eval:package": "node scripts/evaluate-package.mjs",
     "eval:product": "node scripts/evaluate-product.mjs",
+    "bench:audit": "npm run build:core --silent && node scripts/benchmark-audit.mjs",
     "release:bump": "node scripts/bump-version.mjs",
     "release:tag": "node scripts/release-tag.mjs"
   },

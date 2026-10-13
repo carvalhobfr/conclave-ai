@@ -1,4 +1,5 @@
 import type { EmbeddingProvider, EmbeddingRequest, EmbeddingResult } from "../domain/embedding.js";
+import { EXCLUDED_CONTEXT_MARKER, redactSecrets } from "../security/model-context.js";
 import { ProviderError } from "../domain/provider.js";
 import type { FetchLike } from "../providers/openai-compatible-provider.js";
 
@@ -30,6 +31,12 @@ function vectors(payload: unknown, expected: number, provider: string): readonly
     }
     return embedding as number[];
   });
+}
+
+/** Embedding input leaves the machine like any model request, so it crosses the same boundary. */
+function outgoingText(text: string): string {
+  const result = redactSecrets(text);
+  return result.residual ? EXCLUDED_CONTEXT_MARKER : result.text;
 }
 
 /** A small OpenAI-compatible embeddings adapter. It is opt-in and never substitutes feature hashing. */
@@ -73,7 +80,7 @@ export class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
       response = await this.#fetch(this.#endpoint, {
         method: "POST",
         headers: { "content-type": "application/json", ...(this.#apiKey === undefined ? {} : { authorization: `Bearer ${this.#apiKey}` }) },
-        body: JSON.stringify({ model: this.#model, input: requests.map((request) => request.text) }),
+        body: JSON.stringify({ model: this.#model, input: requests.map((request) => outgoingText(request.text)) }),
         signal: AbortSignal.timeout(this.#timeoutMs),
       });
     } catch (error) {

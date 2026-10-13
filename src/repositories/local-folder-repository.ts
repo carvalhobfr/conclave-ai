@@ -4,6 +4,7 @@ import { basename, join, relative, sep } from "node:path";
 
 import type {
   LoadRepositoryRequest,
+  RepositoryExclusion,
   RepositoryFile,
   RepositoryScanStats,
   RepositorySnapshot,
@@ -12,7 +13,7 @@ import type {
 import { assessRepositoryContent } from "../security/content-safety.js";
 import { isPathInside, resolveRepositoryRoot } from "../security/path-policy.js";
 import { detectLanguage, isLikelyBinary } from "./file-classifier.js";
-import { createRepositoryIgnore } from "./ignore-rules.js";
+import { createRepositoryIgnore, isSensitivePath } from "./ignore-rules.js";
 
 export interface LocalFolderRepositoryOptions {
   readonly allowedRoots?: readonly string[];
@@ -74,6 +75,7 @@ export class LocalFolderRepository implements RepositorySource {
     const rootPath = await resolveRepositoryRoot(request.path, this.#allowedRoots);
     const ignore = await createRepositoryIgnore(rootPath);
     const files: RepositoryFile[] = [];
+    const exclusions: RepositoryExclusion[] = [];
     const stats = emptyStats();
     const directories = [rootPath];
 
@@ -93,11 +95,16 @@ export class LocalFolderRepository implements RepositorySource {
 
         if (ignore.ignores(ignoreCandidate)) {
           stats.ignoredEntries += 1;
+          exclusions.push({
+            relativePath: ignoreCandidate,
+            reason: !entry.isDirectory() && isSensitivePath(relativePath) ? "sensitive-path" : "ignored",
+          });
           continue;
         }
 
         if (entry.isSymbolicLink()) {
           stats.skippedSymlinks += 1;
+          exclusions.push({ relativePath, reason: "symlink" });
           continue;
         }
 
@@ -108,6 +115,7 @@ export class LocalFolderRepository implements RepositorySource {
 
         if (!entry.isFile()) {
           stats.skippedUnreadableFiles += 1;
+          exclusions.push({ relativePath, reason: "unreadable" });
           continue;
         }
 
@@ -117,11 +125,13 @@ export class LocalFolderRepository implements RepositorySource {
           );
         }
 
-        await this.#loadFile(rootPath, absolutePath, relativePath, files, stats);
+        const skipped = await this.#loadFile(rootPath, absolutePath, relativePath, files, stats);
+        if (skipped !== undefined) exclusions.push({ relativePath, reason: skipped });
       }
     }
 
     files.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+    exclusions.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
     const repositoryId = createHash("sha256").update(rootPath).digest("hex").slice(0, 16);
 
     return {
@@ -134,37 +144,39 @@ export class LocalFolderRepository implements RepositorySource {
       files,
       scannedAt: new Date().toISOString(),
       stats: asReadonlyStats(stats),
+      exclusions,
     };
   }
 
+  /** Returns why the file was skipped, or undefined when it was loaded. */
   async #loadFile(
     rootPath: string,
     absolutePath: string,
     relativePath: string,
     files: RepositoryFile[],
     stats: MutableStats,
-  ): Promise<void> {
+  ): Promise<RepositoryExclusion["reason"] | undefined> {
     try {
       const fileStats = await lstat(absolutePath);
       if (fileStats.isSymbolicLink()) {
         stats.skippedSymlinks += 1;
-        return;
+        return "symlink";
       }
       if (fileStats.size > this.#maxFileBytes) {
         stats.skippedOversizedFiles += 1;
-        return;
+        return "oversized";
       }
 
       const canonicalFilePath = await realpath(absolutePath);
       if (!isPathInside(rootPath, canonicalFilePath)) {
         stats.skippedUnreadableFiles += 1;
-        return;
+        return "unreadable";
       }
 
       const bytes = await readFile(canonicalFilePath);
       if (isLikelyBinary(relativePath, bytes)) {
         stats.skippedBinaryFiles += 1;
-        return;
+        return "binary";
       }
 
       const content = bytes.toString("utf8");
@@ -183,8 +195,10 @@ export class LocalFolderRepository implements RepositorySource {
       });
       stats.filesLoaded += 1;
       stats.bytesLoaded += bytes.byteLength;
+      return undefined;
     } catch {
       stats.skippedUnreadableFiles += 1;
+      return "unreadable";
     }
   }
 }

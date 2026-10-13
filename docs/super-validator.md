@@ -69,7 +69,7 @@ The schema-v2 `trustBoundary` records the work actually used to reach a validati
 
 Every report contains a digest-bound lineage envelope. Rechecks can supply the previous report so Conclave can verify its digest, preserve the review series, compare the objective and contract structurally, and classify recurring findings. A semantic objective change, removed or changed claim, changed allowed scope, or invalid previous digest produces `rebaseline-required` and an `INCONCLUSIVE` result. Added claims strengthen the existing contract.
 
-Finding fingerprints omit volatile line positions and numeric counters. The lifecycle distinguishes identical reruns, meaningful progress, persistent stagnation, and regressions. Duplicate diffs do not advance the stagnation counter.
+Finding fingerprints omit volatile line positions and numeric counters, and are unique within a report: single-location findings are anchored to their enclosing symbol and flagged line, so two defects of one kind in one file are tracked separately. The lifecycle distinguishes identical reruns, meaningful progress, persistent stagnation, and regressions. Duplicate diffs do not advance the stagnation counter.
 
 See [review-lineage.md](review-lineage.md) for the CLI protocol and receipt format.
 

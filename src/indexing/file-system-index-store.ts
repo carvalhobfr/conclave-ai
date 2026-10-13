@@ -52,6 +52,18 @@ const RESOLUTION_METHODS = new Set([
   "unique-same-file-identifier",
 ]);
 
+const COVERAGE_GAP_REASONS = new Set([
+  "safety-excluded-path",
+  "safety-excluded-content",
+  "ignored",
+  "unsupported-language",
+  "parser-failure",
+  "binary",
+  "oversized",
+  "symlink",
+  "unreadable",
+]);
+
 function validatePersistedIndex(value: unknown, canonicalRoot: string): RepositoryCodeIndex {
   if (!isRecord(value) || value["schemaVersion"] !== CODE_INDEX_SCHEMA_VERSION) {
     throw new UnsupportedCodeIndexSchemaError();
@@ -194,6 +206,25 @@ function validatePersistedIndex(value: unknown, canonicalRoot: string): Reposito
       (to["kind"] === "file" ? !(to["id"] in files) : !(to["id"] in units))
     ) {
       throw new Error("Code index graph edge references an invalid node or path");
+    }
+  }
+  // Optional: indexes written before coverage was recorded do not have it.
+  const coverage = value["coverage"];
+  if (coverage !== undefined) {
+    const gaps = isRecord(coverage) ? coverage["gaps"] : undefined;
+    if (
+      !Array.isArray(gaps) ||
+      !gaps.every(
+        (gap) =>
+          isRecord(gap) &&
+          typeof gap["path"] === "string" &&
+          isSafeRelativePath(gap["path"]) &&
+          typeof gap["reason"] === "string" &&
+          COVERAGE_GAP_REASONS.has(gap["reason"]) &&
+          (gap["detail"] === undefined || typeof gap["detail"] === "string"),
+      )
+    ) {
+      throw new Error("Code index coverage is invalid");
     }
   }
   return value as unknown as RepositoryCodeIndex;

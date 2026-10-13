@@ -1,14 +1,17 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ProjectView, RuntimeConfigurationResult, ValidationRunView } from "../src/web/contracts.js";
+import { auditRepository } from "../src/analysis/repository-audit.js";
 import { ConclaveProductService } from "../src/web/product-service.js";
+import type { EvidenceExcerpt, FindingDetail, FindingView, ProposalCreation, ProposalDetail } from "../src/workflow/triage-service.js";
 import { createConclaveWebServer } from "../src/web/server.js";
 
 const execFileAsync = promisify(execFile);
@@ -175,6 +178,14 @@ describe("Conclave web server runtime settings", () => {
       "/api/run",
       "/api/runtime",
       "/api/runtime/models",
+      "/api/findings/classify",
+      "/api/issues/propose",
+      "/api/issues/edit",
+      "/api/issues/submit",
+      "/api/issues/approve",
+      "/api/issues/reject",
+      "/api/issues/ready",
+      "/api/issues/refresh",
     ] as const;
 
     for (const route of routes) {
@@ -258,6 +269,72 @@ describe("Conclave web server routes", () => {
     expect(history.status).toBe(200);
     expect(Array.isArray(await history.json())).toBe(true);
   });
+
+  it("serves the audit triage workflow and never approves without the reviewed revision", async () => {
+    const { parent, root } = await repositoryFixture();
+    await writeFile(join(root, "src", "listen.ts"), "export function watch() {\n  window.addEventListener(\"resize\", onResize);\n}\n");
+    const fetchSpy = vi.fn(() => Promise.reject(new Error("The triage API must not call a provider")));
+    const origin = await listen(createConclaveWebServer({ product: new ConclaveProductService({ allowedRoot: parent, environment: {}, fetchImplementation: fetchSpy }) }));
+    const project = await (await postJson(origin, "/api/projects/open", { path: root })).json() as ProjectView;
+    const query = `projectId=${encodeURIComponent(project.id)}`;
+    const get = async (path: string): Promise<unknown> => JSON.parse(await (await fetch(`${origin}${path}`)).text()) as unknown;
+    // The caller names the response shape it is about to assert on.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
+    const post = async <T>(path: string, payload: object): Promise<{ readonly status: number; readonly value: T }> => {
+      const response = await postJson(origin, path, { projectId: project.id, ...payload });
+      return { status: response.status, value: await response.json() as T };
+    };
+
+    // Nothing audited yet: reads are empty and create no state.
+    expect(await get(`/api/findings?${query}`)).toEqual([]);
+    expect(await get(`/api/audit/runs?${query}`)).toEqual([]);
+    expect(existsSync(join(root, ".conclave", "findings"))).toBe(false);
+
+    await auditRepository(root, { write: true });
+    const findings = await get(`/api/findings?${query}&state=new&rule=unreleased-resource`) as readonly FindingView[];
+    expect(findings).toHaveLength(1);
+    const id = findings[0]?.id ?? "";
+    expect(await get(`/api/audit/runs?${query}`)).toHaveLength(1);
+    const detail = await get(`/api/findings/detail?${query}&id=${id}`) as FindingDetail & { readonly source: readonly EvidenceExcerpt[] };
+    expect(detail.finding.issueEligibility).toEqual({ eligible: true });
+    expect(detail.source[0]?.lines?.some((line) => line.text.includes("addEventListener"))).toBe(true);
+    expect((await fetch(`${origin}/api/findings?${query}&state=fixed`)).status).toBe(400);
+
+    const classified = await post<FindingView>("/api/findings/classify", { id, classification: "confirmed", note: "Never removed" });
+    expect(classified.value.disposition).toEqual(expect.objectContaining({ classification: "confirmed", classifiedBy: { kind: "api", name: "cockpit" } }));
+    expect((await post("/api/findings/classify", { id, classification: "wontfix" })).status).toBe(400);
+    expect(await get(`/api/issues?${query}`)).toEqual([]);
+
+    const proposed = await post<ProposalCreation>("/api/issues/propose", { findingId: id });
+    const proposal = proposed.value.proposal;
+    expect(proposed.value.created).toBe(true);
+    expect(proposal).toEqual(expect.objectContaining({ status: "draft", hypothesis: false }));
+    const edited = await post<ProposalDetail>("/api/issues/edit", { id: proposal.id, title: "Resize listener is never removed", labels: ["bug"] });
+    expect(edited.value.proposal.revision).not.toBe(proposal.revision);
+    expect((await post<ProposalDetail>("/api/issues/submit", { id: proposal.id })).value.proposal.status).toBe("pending-review");
+
+    // Approval needs the revision that was read; a missing or outdated one approves nothing.
+    const missing = await post<{ readonly error: { readonly code: string } }>("/api/issues/approve", { id: proposal.id });
+    expect([missing.status, missing.value.error.code]).toEqual([400, "invalid_request"]);
+    const outdated = await post<{ readonly error: { readonly code: string } }>("/api/issues/approve", { id: proposal.id, revision: proposal.revision });
+    expect([outdated.status, outdated.value.error.code]).toEqual([400, "revision_mismatch"]);
+    expect((await get(`/api/issues/detail?${query}&id=${proposal.id}`) as ProposalDetail).proposal.approval).toBeUndefined();
+
+    const approved = await post<ProposalDetail>("/api/issues/approve", { id: proposal.id, revision: edited.value.proposal.revision });
+    expect(approved.value.proposal).toEqual(expect.objectContaining({ status: "approved", approval: expect.objectContaining({ method: "api-revision", revision: edited.value.proposal.revision }) as unknown }));
+    const ready = await post<ProposalDetail>("/api/issues/ready", { id: proposal.id });
+    expect(ready.value).toEqual(expect.objectContaining({ gate: { publishable: true, blockers: [] } }));
+    expect(await get(`/api/issues?${query}&status=ready-for-publication`)).toHaveLength(1);
+
+    // There is no publication route, and nothing reached a provider.
+    expect((await post<{ readonly error: { readonly code: string } }>("/api/issues/publish", { id: proposal.id })).value.error.code).toBe("unknown_action");
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // The demo project has no local state to triage.
+    const demo = await (await postJson(origin, "/api/projects/demo", {})).json() as ProjectView;
+    const refused = await fetch(`${origin}/api/findings?projectId=${encodeURIComponent(demo.id)}`);
+    expect([refused.status, (await refused.json() as { readonly error: { readonly code: string } }).error.code]).toEqual([400, "triage_unavailable"]);
+  }, 30000);
 
   it("accepts every documented change source and names the ones it does not", async () => {
     const { parent, root } = await repositoryFixture();

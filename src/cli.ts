@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { smokeCommand } from "./execution/browser-smoke.js";
+import { auditCommand } from "./cli-audit.js";
+import { findingsCommand, issuesCommand } from "./cli-triage.js";
 import { collectCommand } from "./execution/collect-evidence.js";
 import { loadAttestedEvidence } from "./validation/attested-evidence.js";
 import { loadAcceptanceContract, saveAcceptanceContract } from "./storage/acceptance-contract.js";
@@ -89,6 +91,7 @@ import type { ChangeSource, EvidenceReceiptInput, ValidationContract, Validation
 import { createValidationContract, parseValidationContract } from "./validation/contract-parser.js";
 import { GitChangeSetService } from "./validation/git-change-set.js";
 import { createDeterministicValidationIndex } from "./validation/deterministic-index.js";
+import { describeChangedCoverage, explainCoverageGap, formatReasonCounts, summarizeIndexCoverage } from "./validation/coverage.js";
 import { SuperValidator } from "./validation/super-validator.js";
 import { parseEvidenceReceiptEnvelope } from "./validation/evidence-receipts.js";
 import { createPullRequestSummary } from "./domain/pr-summary.js";
@@ -155,11 +158,22 @@ async function scan(args: readonly string[]): Promise<void> {
         snapshot.files.filter((file) => file.language === language).length,
       ]),
   );
+  // Paths and categories only. Content that matched a safeguard is never printed.
+  const safetyExclusions = [
+    ...(snapshot.exclusions ?? []).filter((item) => item.reason === "sensitive-path")
+      .map((item) => ({ path: item.relativePath, reason: "safety-excluded-path" as const })),
+    ...snapshot.files.filter((file) => !file.safety.externalTransmissionAllowed).map((file) => ({
+      path: file.relativePath,
+      reason: "safety-excluded-content" as const,
+      detail: [...new Set(file.safety.findings.filter((item) => item.severity === "block").map((item) => item.kind))].sort().join(", "),
+    })),
+  ].sort((left, right) => left.path.localeCompare(right.path));
   const report = {
     repository: snapshot.repository,
     scannedAt: snapshot.scannedAt,
     stats: snapshot.stats,
     languages: languageCounts,
+    safetyExclusions,
   };
 
   if (parsed.json) {
@@ -175,6 +189,10 @@ async function scan(args: readonly string[]): Promise<void> {
   console.log(
     `Skipped: ${String(snapshot.stats.ignoredEntries)} ignored, ${String(snapshot.stats.skippedBinaryFiles)} binary, ${String(snapshot.stats.skippedOversizedFiles)} oversized, ${String(snapshot.stats.skippedSymlinks)} symlinks`,
   );
+  if (safetyExclusions.length > 0) {
+    console.log(`Excluded for safety and not analyzed: ${String(safetyExclusions.length)} files`);
+    for (const item of safetyExclusions) console.log(`- ${item.path} — ${explainCoverageGap(item)}`);
+  }
 }
 
 function createIndexer(): {
@@ -210,6 +228,7 @@ async function indexRepository(args: readonly string[]): Promise<void> {
     symbols: Object.keys(result.index.units).length,
     graphEdges: result.index.graphEdges.length,
     embedding: result.index.embedding,
+    ...(result.index.coverage === undefined ? {} : { coverage: summarizeIndexCoverage(result.index.coverage) }),
   };
   if (parsed.json) {
     print(report, true);
@@ -220,6 +239,11 @@ async function indexRepository(args: readonly string[]): Promise<void> {
     `${String(report.files)} files, ${String(report.symbols)} symbols, ${String(report.graphEdges)} graph edges`,
   );
   console.log(`Changes: ${JSON.stringify(result.stats)}`);
+  if (report.coverage !== undefined && Object.keys(report.coverage.excluded).length > 0) {
+    console.log(`Not indexed: ${formatReasonCounts(report.coverage.excluded)}`);
+    for (const item of report.coverage.safetyExcluded) console.log(`- ${item.path} — ${explainCoverageGap(item)}`);
+    if (report.coverage.safetyExcludedOmitted > 0) console.log(`- ${String(report.coverage.safetyExcludedOmitted)} more safety exclusions`);
+  }
   console.log("Saved: .conclave/code-index-v2.json (used by search, graph, and Ask; PR review builds its own snapshot)");
 }
 
@@ -525,7 +549,7 @@ async function reasonAboutRepository(args: readonly string[], intent: "ask" | "i
       changeContext === undefined ? {} : { changeContext }),
   }).ask(question, intent === "ask" ? "investigator-judge" : "conclave");
   if (parsed.json) {
-    print(parsed.debug ? result : { verdict: result.verdict, metrics: result.metrics, terminationReason: result.terminationReason }, true);
+    print(parsed.debug ? result : { verdict: result.verdict, metrics: result.metrics, terminationReason: result.terminationReason, contextProtection: result.contextProtection }, true);
     return;
   }
   console.log(result.verdict.answer);
@@ -557,6 +581,12 @@ async function reasonAboutRepository(args: readonly string[], intent: "ask" | "i
   console.log(
     `Follow-ups: ${String(result.metrics.followUpRequests)}; retrieval rounds: ${String(result.metrics.retrievalRounds)}; model calls: ${String(result.metrics.modelCalls)}`,
   );
+  const protection = result.contextProtection;
+  if (protection !== undefined && (protection.redactions.length > 0 || protection.exclusions.length > 0)) {
+    const redacted = protection.redactions.reduce((total, item) => total + item.count, 0);
+    console.log(`Coverage: ${String(redacted)} recognized secret(s) were redacted and ${String(protection.exclusions.length)} context unit(s) withheld before any model call. The answer does not account for that content.`);
+    for (const source of [...new Set([...protection.redactions, ...protection.exclusions].map((item) => item.source))]) console.log(`- ${source}`);
+  }
   console.log(
     `Approximate model context: ${String(result.metrics.approximateInputTokens)} input / ${String(result.metrics.approximateOutputTokens)} output tokens`,
   );
@@ -1135,6 +1165,14 @@ function printValidationReport(report: ValidationReport): void {
       "Finding lifecycle: " + report.findingLifecycle.progress +
       ` (${String(report.findingLifecycle.resolved.length)} resolved, ${String(report.findingLifecycle.stagnating.length)} stagnating)`,
     );
+    if (report.coverage !== undefined) {
+      const changed = describeChangedCoverage(report.coverage);
+      if (changed !== undefined) console.log("Coverage: " + changed);
+      const repository = report.coverage.repository;
+      if (repository !== undefined && Object.keys(repository.excluded).length > 0) {
+        console.log(`Repository coverage: ${String(repository.analyzedFiles)} files analyzed; not analyzed: ${formatReasonCounts(repository.excluded)}`);
+      }
+    }
     if (report.changeSet.files.length > 0) {
       console.log(copy.changedFiles + ":");
       for (const file of report.changeSet.files) {
@@ -1989,6 +2027,7 @@ async function runDemo(): Promise<void> {
 const KNOWN_COMMANDS = [
   "check", "compare", "open", "review", "validate", "pr", "history", "handoff", "doctor", "setup", "update", "start",
   "scan", "index", "search", "retrieve", "symbol", "text", "graph", "path", "ask", "investigate", "smoke", "collect",
+  "audit", "findings", "issues",
   "criteria", "eval", "eval-graph", "eval-reasoning", "config", "models", "init", "skill", "provider-check", "mcp", "demo", "tools", "help",
 ] as const;
 
@@ -2083,6 +2122,15 @@ async function main(): Promise<void> {
       return;
     case "collect":
       await collectCommand(args);
+      return;
+    case "audit":
+      await auditCommand(args);
+      return;
+    case "findings":
+      await findingsCommand(args);
+      return;
+    case "issues":
+      await issuesCommand(args);
       return;
     case "criteria":
       await editAcceptance(args);

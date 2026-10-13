@@ -27,6 +27,7 @@ import { approximateTokenCount } from "../retrieval/context-packer.js";
 import type { AgentCallRecord, StructuredAgentRuntime } from "./agent-runtime.js";
 import { AgentExecutionError } from "./agent-runtime.js";
 import { DeterministicClaimVerifier, requestForClaimCheck } from "./deterministic-verifier.js";
+import { ModelContextLedger } from "../security/model-context.js";
 import { routeReasoningAgents } from "./reasoning-router.js";
 import {
   architectPrompt,
@@ -156,6 +157,14 @@ export class ReasoningEngine {
     const started = performance.now();
     const trace: ReasoningTraceEvent[] = [];
     const calls: AgentCallRecord[] = [];
+    // One ledger per run: every excerpt and hunk is sanitized through it before a prompt is
+    // built, and the sanitized hunks are also what the result retains.
+    const ledger = new ModelContextLedger();
+    const changeContext = this.#changeContext === undefined ? undefined : {
+      ...this.#changeContext,
+      hunks: this.#changeContext.hunks.map((hunk) => ({ path: hunk.path, patch: ledger.protect(hunk.path, hunk.patch) })),
+    };
+    ledger.merge(this.#changeContext?.protection);
     const agentsExecuted = new Set<AgentRole>();
     let iteration = 0;
     let terminationReason: ReasoningResult["terminationReason"] = "completed";
@@ -176,15 +185,15 @@ export class ReasoningEngine {
     };
     emit(
       "reasoning_started",
-      this.#changeContext === undefined
+      changeContext === undefined
         ? `Started ${mode} reasoning`
-        : `Started ${mode} reasoning with ${this.#changeContext.source} Git context`,
-      this.#changeContext === undefined
+        : `Started ${mode} reasoning with ${changeContext.source} Git context`,
+      changeContext === undefined
         ? {}
-        : { data: { changeContext: this.#changeContext.source, changedPaths: this.#changeContext.paths.length } },
+        : { data: { changeContext: changeContext.source, changedPaths: changeContext.paths.length } },
     );
 
-    const initialRetrieval = await this.#retrieval.retrieve(retrievalQuery(question, this.#changeContext), {
+    const initialRetrieval = await this.#retrieval.retrieve(retrievalQuery(question, changeContext), {
       budget: {
         graphDepth: 2,
         graphNodes: Math.min(30, this.#limits.maxEvidenceUnits * 2),
@@ -221,6 +230,7 @@ export class ReasoningEngine {
       try {
         const execution = await this.#runtime.execute(role, prompt, validate, remainingCalls);
         calls.push(...execution.calls);
+        for (const call of execution.calls) if (call.contextRedactions !== undefined) ledger.recordOutgoing(call.contextRedactions);
         for (const call of execution.calls.filter((record) => record.repaired)) {
           emit("agent_output_repair_requested", `${role} structured output was repaired`, {
             role,
@@ -248,7 +258,7 @@ export class ReasoningEngine {
     );
     const investigator = await executeAgent(
       "investigator",
-      investigatorPrompt(question, initialContext, this.#changeContext),
+      investigatorPrompt(question, initialContext, changeContext, ledger),
       (raw) => parseInvestigatorOutput(raw, initialEvidenceIds),
     );
     if (investigator !== undefined) {
@@ -370,13 +380,13 @@ export class ReasoningEngine {
 
     const claimIds = new Set(claims.map((claim) => claim.id));
     if (mode === "conclave" && selections.find((item) => item.role === "skeptic")?.selected === true) {
-      const output = await executeAgent("skeptic", skepticPrompt(question, claims, initialContext), (raw) =>
+      const output = await executeAgent("skeptic", skepticPrompt(question, claims, initialContext, ledger), (raw) =>
         parseSkepticOutput(raw, claimIds),
       );
       if (output !== undefined) addChallenges(output.challenges, "skeptic");
     }
     if (mode === "conclave" && selections.find((item) => item.role === "architect")?.selected === true) {
-      const output = await executeAgent("architect", architectPrompt(question, claims, initialContext), (raw) =>
+      const output = await executeAgent("architect", architectPrompt(question, claims, initialContext, ledger), (raw) =>
         parseArchitectOutput(raw, claimIds),
       );
       if (output !== undefined) {
@@ -477,7 +487,7 @@ export class ReasoningEngine {
         const edgeIds = new Set(graphEdges.map((edge) => edge.id));
         const output = await executeAgent(
           "verifier",
-          verifierPrompt(question, unresolvedClaims, challenges, verifications, context),
+          verifierPrompt(question, unresolvedClaims, challenges, verifications, context, ledger),
           (raw) => parseVerifierOutput(raw, new Set(unresolvedClaims.map((claim) => claim.id)), allEvidenceIds, edgeIds),
         );
         if (output !== undefined) {
@@ -555,6 +565,15 @@ export class ReasoningEngine {
       },
     });
     if (executionState.agentFailed && terminationReason === "completed") terminationReason = "agent-failure";
+    const contextProtection = ledger.summary();
+    if (contextProtection.redactions.length > 0 || contextProtection.exclusions.length > 0) {
+      emit("context_protected", "Repository context was redacted or withheld before model calls", {
+        data: {
+          redactions: contextProtection.redactions.reduce((total, item) => total + item.count, 0),
+          excluded: contextProtection.exclusions.length,
+        },
+      });
+    }
 
     const usage = roleUsage(calls);
     const metrics: ReasoningMetrics = {
@@ -580,7 +599,7 @@ export class ReasoningEngine {
     };
     const state: ReasoningCaseState = {
       question,
-      ...(this.#changeContext === undefined ? {} : { changeContext: this.#changeContext }),
+      ...(changeContext === undefined ? {} : { changeContext: changeContext }),
       iteration,
       initialRetrieval,
       initialContext,
@@ -593,6 +612,6 @@ export class ReasoningEngine {
       graphEdges,
       selections,
     };
-    return { verdict, state, trace, metrics, terminationReason };
+    return { verdict, state, trace, metrics, terminationReason, contextProtection };
   }
 }

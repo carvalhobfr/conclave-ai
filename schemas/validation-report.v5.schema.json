@@ -199,6 +199,9 @@
           }
         }
       }
+    },
+    "coverage": {
+      "$ref": "#/$defs/coverage"
     }
   },
   "$defs": {
@@ -1118,6 +1121,133 @@
         },
         "suggestedProbes": {
           "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "coverageGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "reason"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "safety-excluded-path",
+            "safety-excluded-content",
+            "ignored",
+            "unsupported-language",
+            "parser-failure",
+            "binary",
+            "oversized",
+            "symlink",
+            "unreadable",
+            "not-indexed"
+          ]
+        },
+        "detail": {
+          "type": "string"
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "changedFiles",
+        "gaps"
+      ],
+      "properties": {
+        "changedFiles": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "total",
+            "analyzed",
+            "deleted",
+            "notAnalyzed"
+          ],
+          "properties": {
+            "total": {
+              "$ref": "#/$defs/nonNegativeInteger"
+            },
+            "analyzed": {
+              "$ref": "#/$defs/nonNegativeInteger"
+            },
+            "deleted": {
+              "$ref": "#/$defs/nonNegativeInteger"
+            },
+            "notAnalyzed": {
+              "$ref": "#/$defs/nonNegativeInteger"
+            }
+          }
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/coverageGap"
+          }
+        },
+        "repository": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "analyzedFiles",
+            "excluded",
+            "safetyExcluded",
+            "safetyExcludedOmitted"
+          ],
+          "properties": {
+            "analyzedFiles": {
+              "$ref": "#/$defs/nonNegativeInteger"
+            },
+            "excluded": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "safety-excluded-path": {
+                  "$ref": "#/$defs/nonNegativeInteger"
+                },
+                "safety-excluded-content": {
+                  "$ref": "#/$defs/nonNegativeInteger"
+                },
+                "ignored": {
+                  "$ref": "#/$defs/nonNegativeInteger"
+                },
+                "unsupported-language": {
+                  "$ref": "#/$defs/nonNegativeInteger"
+                },
+                "parser-failure": {
+                  "$ref": "#/$defs/nonNegativeInteger"
+                },
+                "binary": {
+                  "$ref": "#/$defs/nonNegativeInteger"
+                },
+                "oversized": {
+                  "$ref": "#/$defs/nonNegativeInteger"
+                },
+                "symlink": {
+                  "$ref": "#/$defs/nonNegativeInteger"
+                },
+                "unreadable": {
+                  "$ref": "#/$defs/nonNegativeInteger"
+                }
+              }
+            },
+            "safetyExcluded": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/coverageGap"
+              }
+            },
+            "safetyExcludedOmitted": {
+              "$ref": "#/$defs/nonNegativeInteger"
+            }
+          }
         }
       }
     }

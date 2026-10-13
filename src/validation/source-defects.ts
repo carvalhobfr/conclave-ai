@@ -1,5 +1,7 @@
 import ts from "typescript";
 
+import type { AnalysisFile } from "../analysis/rule.js";
+import { changeScopeFiles } from "../analysis/rule.js";
 import type { RepositoryCodeIndex } from "../domain/code-index.js";
 import type { ValidationChangedFile, ValidationEvidence } from "../domain/validation.js";
 import { analyzeTextualSourceDefects } from "./source-defects-textual.js";
@@ -14,11 +16,11 @@ export interface SourceDefect {
 
 const JS_FAMILY = /\.(?:[cm]?[jt]sx?)$/iu;
 
-function intersects(node: ts.Node, source: ts.SourceFile, file: ValidationChangedFile, includeDeletions = false): boolean {
-  if (file.status === "added") return true;
+function intersects(node: ts.Node, source: ts.SourceFile, file: AnalysisFile, includeDeletions = false): boolean {
+  if (file.changedRanges === undefined) return true;
   const start = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
   const end = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
-  return file.hunks.some((hunk) => (hunk.newCount > 0 || includeDeletions) && start < hunk.newStart + Math.max(1, hunk.newCount) && end >= hunk.newStart);
+  return file.changedRanges.some((hunk) => (hunk.newCount > 0 || includeDeletions) && start < hunk.newStart + Math.max(1, hunk.newCount) && end >= hunk.newStart);
 }
 
 function method(call: ts.CallExpression): string {
@@ -85,7 +87,7 @@ function hasCleanup(call: ts.CallExpression, calls: readonly ts.CallExpression[]
   return calls.some((other) => method(other) === "unsubscribe" && receiver(other, source) === target);
 }
 
-function defect(file: ValidationChangedFile, source: ts.SourceFile, node: ts.Node, details: Omit<SourceDefect, "evidence">): SourceDefect {
+function defect(file: AnalysisFile, source: ts.SourceFile, node: ts.Node, details: Omit<SourceDefect, "evidence">): SourceDefect {
   const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
   return { ...details, evidence: { path: file.path, startLine: line, endLine: line, reason: details.title } };
 }
@@ -96,75 +98,83 @@ function storageIdentity(call: ts.CallExpression, source: ts.SourceFile): string
     ? name.replace(/^(?:window|globalThis)\./u, "") : undefined;
 }
 
-/** Syntax-only observations. Absence of a finding never proves runtime correctness. */
+/**
+ * Every defect observation for one file, in source order. Returns undefined when no rule
+ * applies: the language has none, or the file is in scope with no lines to examine.
+ * Syntax-only observations; absence of a finding never proves runtime correctness.
+ */
+export function analyzeFileDefects(file: AnalysisFile, sourceText: string): { readonly defects: readonly SourceDefect[]; readonly checksPerformed: number } | undefined {
+  if (file.changedRanges?.length === 0) return undefined;
+  const defects: SourceDefect[] = [];
+  if (!JS_FAMILY.test(file.path)) {
+    const textual = analyzeTextualSourceDefects(file, sourceText);
+    // Empty handlers and resource release for this file.
+    return textual === undefined ? undefined : { defects: textual, checksPerformed: 2 };
+  }
+  const source = ts.createSourceFile(file.path, sourceText, ts.ScriptTarget.Latest, true);
+  const calls: ts.CallExpression[] = [];
+  const catches: ts.CatchClause[] = [];
+  const constants = new Map<string, string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) calls.push(node);
+    if (ts.isCatchClause(node)) catches.push(node);
+    // Only top-level literal constants are resolved; scoped aliases require semantic analysis.
+    if (ts.isVariableStatement(node) && node.parent === source && (node.declarationList.flags & ts.NodeFlags.Const) !== 0) {
+      for (const declaration of node.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.initializer !== undefined && ts.isStringLiteralLike(declaration.initializer)) {
+          constants.set(declaration.name.text, declaration.initializer.text);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  for (const call of calls.filter((node) => intersects(node, source, file))) {
+    const name = method(call);
+    if (["addEventListener", "setInterval", "subscribe"].includes(name) && !hasCleanup(call, calls, source)) {
+      defects.push(defect(file, source, call, {
+        kind: "unreleased-resource",
+        title: "Changed resource has no matching cleanup candidate in this file",
+        detail: `${name} has no syntactically matching cleanup candidate in this file. Cleanup may be delegated or the registration may be intentionally permanent; runtime lifetime is not proven by this check.`,
+        remediation: "Check the resource lifetime and its matching teardown path. Add cleanup if required, or document the delegated or permanent lifetime.",
+      }));
+    }
+    const store = storageIdentity(call, source);
+    const key = call.arguments[0];
+    if (store === undefined || !["setItem", "getItem", "removeItem"].includes(name) || key === undefined || !ts.isStringLiteralLike(key)) continue;
+    const named = calls.filter((other) => storageIdentity(other, source) === store && ["setItem", "getItem", "removeItem"].includes(method(other)))
+      .map((other) => other.arguments[0]).filter((argument): argument is ts.Identifier => argument !== undefined && ts.isIdentifier(argument))
+      .map((argument) => argument.text).filter((identifier) => constants.has(identifier));
+    if (named.length === 0 || named.some((identifier) => constants.get(identifier) === key.text)) continue;
+    defects.push(defect(file, source, call, {
+      kind: "inconsistent-key",
+      title: "Changed storage call uses a different key from named keys in this file",
+      detail: `${store} uses ${JSON.stringify(key.text)} here and also uses ${[...new Set(named)].join(", ")}. These may intentionally be separate entries; this is a key-consistency review signal.`,
+      remediation: "Confirm the intended storage entry. Reuse its named key when these paths should address the same value.",
+    }));
+  }
+  for (const clause of catches) {
+    if (clause.block.statements.length > 0 || !intersects(clause, source, file, true)) continue;
+    defects.push(defect(file, source, clause, {
+      kind: "discarded-error",
+      title: "Changed code has an empty catch block",
+      detail: "This catch block contains no statements. The syntax shows that the error is ignored here; whether that is intentional requires review.",
+      remediation: "Handle, rethrow or record the error, or document why ignoring this failure is correct.",
+    }));
+  }
+  // Resource candidates, storage keys, and empty catches for this file.
+  return { defects, checksPerformed: 3 };
+}
+
+/** Change-scope entry point: the defects on the lines a change touched. */
 export function analyzeSourceDefects(index: RepositoryCodeIndex, files: readonly ValidationChangedFile[]): { readonly defects: readonly SourceDefect[]; readonly checksPerformed: number } {
   const defects: SourceDefect[] = [];
   let checksPerformed = 0;
-  for (const file of files) {
-    if (file.status === "deleted") continue;
-    const indexed = index.files[file.path];
-    if (indexed === undefined) continue;
-    if (file.status !== "added" && file.hunks.length === 0) continue;
-    if (!JS_FAMILY.test(file.path)) {
-      const textual = analyzeTextualSourceDefects(file, indexed.sourceText);
-      if (textual !== undefined) {
-        checksPerformed += 2; // empty handlers and resource release for this file.
-        defects.push(...textual);
-      }
-      continue;
-    }
-    checksPerformed += 3; // resource candidates, storage keys, and empty catches for this file.
-    const source = ts.createSourceFile(file.path, indexed.sourceText, ts.ScriptTarget.Latest, true);
-    const calls: ts.CallExpression[] = [];
-    const catches: ts.CatchClause[] = [];
-    const constants = new Map<string, string>();
-    const visit = (node: ts.Node): void => {
-      if (ts.isCallExpression(node)) calls.push(node);
-      if (ts.isCatchClause(node)) catches.push(node);
-      // Only top-level literal constants are resolved; scoped aliases require semantic analysis.
-      if (ts.isVariableStatement(node) && node.parent === source && (node.declarationList.flags & ts.NodeFlags.Const) !== 0) {
-        for (const declaration of node.declarationList.declarations) {
-          if (ts.isIdentifier(declaration.name) && declaration.initializer !== undefined && ts.isStringLiteralLike(declaration.initializer)) {
-            constants.set(declaration.name.text, declaration.initializer.text);
-          }
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
-    for (const call of calls.filter((node) => intersects(node, source, file))) {
-      const name = method(call);
-      if (["addEventListener", "setInterval", "subscribe"].includes(name) && !hasCleanup(call, calls, source)) {
-        defects.push(defect(file, source, call, {
-          kind: "unreleased-resource",
-          title: "Changed resource has no matching cleanup candidate in this file",
-          detail: `${name} has no syntactically matching cleanup candidate in this file. Cleanup may be delegated or the registration may be intentionally permanent; runtime lifetime is not proven by this check.`,
-          remediation: "Check the resource lifetime and its matching teardown path. Add cleanup if required, or document the delegated or permanent lifetime.",
-        }));
-      }
-      const store = storageIdentity(call, source);
-      const key = call.arguments[0];
-      if (store === undefined || !["setItem", "getItem", "removeItem"].includes(name) || key === undefined || !ts.isStringLiteralLike(key)) continue;
-      const named = calls.filter((other) => storageIdentity(other, source) === store && ["setItem", "getItem", "removeItem"].includes(method(other)))
-        .map((other) => other.arguments[0]).filter((argument): argument is ts.Identifier => argument !== undefined && ts.isIdentifier(argument))
-        .map((argument) => argument.text).filter((identifier) => constants.has(identifier));
-      if (named.length === 0 || named.some((identifier) => constants.get(identifier) === key.text)) continue;
-      defects.push(defect(file, source, call, {
-        kind: "inconsistent-key",
-        title: "Changed storage call uses a different key from named keys in this file",
-        detail: `${store} uses ${JSON.stringify(key.text)} here and also uses ${[...new Set(named)].join(", ")}. These may intentionally be separate entries; this is a key-consistency review signal.`,
-        remediation: "Confirm the intended storage entry. Reuse its named key when these paths should address the same value.",
-      }));
-    }
-    for (const clause of catches) {
-      if (clause.block.statements.length > 0 || !intersects(clause, source, file, true)) continue;
-      defects.push(defect(file, source, clause, {
-        kind: "discarded-error",
-        title: "Changed code has an empty catch block",
-        detail: "This catch block contains no statements. The syntax shows that the error is ignored here; whether that is intentional requires review.",
-        remediation: "Handle, rethrow or record the error, or document why ignoring this failure is correct.",
-      }));
-    }
+  for (const file of changeScopeFiles(index, files)) {
+    const result = analyzeFileDefects(file, index.files[file.path]?.sourceText ?? "");
+    if (result === undefined) continue;
+    checksPerformed += result.checksPerformed;
+    defects.push(...result.defects);
   }
   return { defects, checksPerformed };
 }

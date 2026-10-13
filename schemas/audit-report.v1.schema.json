@@ -1,0 +1,1496 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://conclave.dev/schemas/audit-report.v1.schema.json",
+  "title": "Conclave Repository Audit Report v1",
+  "description": "Result of `conclave audit`. Separate from the pull-request validation report: it has no objective, diff, contract or merge verdict.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "scope",
+    "analyzer",
+    "repository",
+    "snapshot",
+    "generatedAt",
+    "conclusion",
+    "coverage",
+    "summary",
+    "findings",
+    "rules",
+    "policy",
+    "metrics",
+    "trustBoundary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "kind": {
+      "const": "repository-audit"
+    },
+    "scope": {
+      "const": "repository"
+    },
+    "analyzer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "parser"
+      ],
+      "properties": {
+        "name": {
+          "const": "conclave-ai"
+        },
+        "version": {
+          "type": "string"
+        },
+        "parser": {
+          "type": "string"
+        }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "working-tree",
+            "directory"
+          ]
+        },
+        "headCommit": {
+          "type": "string"
+        }
+      }
+    },
+    "generatedAt": {
+      "type": "string"
+    },
+    "conclusion": {
+      "type": "string"
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "filesDiscovered",
+        "filesAnalyzed",
+        "excluded",
+        "accounting",
+        "analyzedByLanguage",
+        "unanalyzedSource",
+        "unanalyzedSourceOmitted",
+        "limits"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "supported-source-analyzed",
+            "partial"
+          ]
+        },
+        "filesDiscovered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "filesAnalyzed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excluded": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "safety-excluded-path": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "safety-excluded-content": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ignored": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unsupported-language": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "parser-failure": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "binary": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "oversized": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "symlink": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unreadable": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "description": "Skipped entries per recorded reason. An ignored directory is one entry, so these do not sum to filesDiscovered - filesAnalyzed; see accounting."
+        },
+        "analyzedByLanguage": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "unanalyzedSource": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/coverageGap"
+          }
+        },
+        "unanalyzedSourceOmitted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limits": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "accounting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "filesDiscovered",
+            "filesAnalyzed",
+            "filesNotAnalyzed",
+            "eligibleSourceFiles",
+            "ignoredDirectories"
+          ],
+          "properties": {
+            "filesDiscovered": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "filesAnalyzed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "filesNotAnalyzed": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ignored",
+                "safetyExcluded",
+                "unsupported",
+                "parserFailure",
+                "unexamined"
+              ],
+              "properties": {
+                "ignored": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "safetyExcluded": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "unsupported": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "parserFailure": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "unexamined": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "eligibleSourceFiles": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ignoredDirectories": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "description": "File counts. filesAnalyzed plus the values of filesNotAnalyzed equals filesDiscovered. eligibleSourceFiles overlaps filesNotAnalyzed. Files inside an ignored directory are in no file count."
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "findings",
+        "suppressed",
+        "bySeverity",
+        "byCategory",
+        "byRule",
+        "baselined",
+        "exempt",
+        "gated"
+      ],
+      "properties": {
+        "findings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "suppressed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bySeverity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "properties": {
+            "high": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "medium": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "low": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "byCategory": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "parse": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reliability": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "correctness": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "structure": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "byRule": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "baselined": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exempt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gated": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ruleExecution"
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filesDiscovered",
+        "filesAnalyzed",
+        "filesExcluded",
+        "symbols",
+        "graphEdges",
+        "crossFileEdges",
+        "relativeImports",
+        "resolvedRelativeImports",
+        "rulesExecuted",
+        "rulesSkipped",
+        "indexMs",
+        "rulesMs",
+        "totalMs",
+        "heapUsedBytes",
+        "rssBytes"
+      ],
+      "properties": {
+        "filesDiscovered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "filesAnalyzed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "filesExcluded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "symbols": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "graphEdges": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "crossFileEdges": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relativeImports": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resolvedRelativeImports": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rulesExecuted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rulesSkipped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "indexMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rulesMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "totalMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "heapUsedBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rssBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "trustBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deterministic",
+        "modelCalls",
+        "repositoryCodeExecuted",
+        "networkOperations"
+      ],
+      "properties": {
+        "deterministic": {
+          "type": "boolean"
+        },
+        "modelCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "repositoryCodeExecuted": {
+          "const": false
+        },
+        "networkOperations": {
+          "type": "boolean"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "baseline": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "createdAt",
+            "entries",
+            "matched"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "entries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "matched": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "applicability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "declarations",
+            "matched"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "declarations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "matched": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "semantic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pipeline",
+        "discovery",
+        "investigation",
+        "privacyBoundary",
+        "budget",
+        "usage",
+        "coverage",
+        "hypotheses",
+        "dismissed",
+        "dismissedOmitted",
+        "limits"
+      ],
+      "properties": {
+        "discovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "providerId",
+            "modelId"
+          ],
+          "properties": {
+            "providerId": {
+              "type": "string"
+            },
+            "modelId": {
+              "type": "string"
+            }
+          }
+        },
+        "investigation": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "providerId",
+              "modelId"
+            ],
+            "properties": {
+              "role": {
+                "type": "string"
+              },
+              "providerId": {
+                "type": "string"
+              },
+              "modelId": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "privacyBoundary": {
+          "enum": [
+            "local-only",
+            "external"
+          ]
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "maxModelCalls",
+            "maxInputTokens",
+            "maxOutputTokens",
+            "maxDurationMs",
+            "maxRegions",
+            "maxInvestigations"
+          ],
+          "properties": {
+            "maxModelCalls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "maxInputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "maxOutputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "maxDurationMs": {
+              "type": "number",
+              "minimum": 0
+            },
+            "maxRegions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "maxInvestigations": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "stoppedBy": {
+          "enum": [
+            "model-calls",
+            "input-tokens",
+            "output-tokens",
+            "duration",
+            "regions"
+          ]
+        },
+        "usage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "modelCalls",
+            "failedCalls",
+            "approximateInputTokens",
+            "approximateOutputTokens",
+            "providerReportedInputTokens",
+            "providerReportedOutputTokens",
+            "durationMs",
+            "byStage",
+            "cost"
+          ],
+          "properties": {
+            "modelCalls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failedCalls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "approximateInputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "approximateOutputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "providerReportedInputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "providerReportedOutputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "durationMs": {
+              "type": "number",
+              "minimum": 0
+            },
+            "byStage": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "stage",
+                  "providerId",
+                  "modelId",
+                  "calls",
+                  "approximateInputTokens",
+                  "approximateOutputTokens",
+                  "providerReportedInputTokens",
+                  "providerReportedOutputTokens",
+                  "latencyMs"
+                ],
+                "properties": {
+                  "stage": {
+                    "enum": [
+                      "discovery",
+                      "investigation"
+                    ]
+                  },
+                  "providerId": {
+                    "type": "string"
+                  },
+                  "modelId": {
+                    "type": "string"
+                  },
+                  "calls": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "failedCalls": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "approximateInputTokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "approximateOutputTokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "providerReportedInputTokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "providerReportedOutputTokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "latencyMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                }
+              }
+            },
+            "cost": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "enum": [
+                    "not-priced",
+                    "local-inference",
+                    "estimated"
+                  ]
+                },
+                "currency": {
+                  "const": "USD"
+                },
+                "amount": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "inputPerMillionTokens": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "outputPerMillionTokens": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "basis": {
+                  "enum": [
+                    "provider-reported",
+                    "approximate"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "eligibleFiles",
+            "filesExamined",
+            "filesPartiallyExamined",
+            "filesNotExamined",
+            "filesInvestigated",
+            "eligibleLines",
+            "linesExamined",
+            "regionsPlanned",
+            "regionsByState",
+            "regions",
+            "regionsOmitted",
+            "complete"
+          ],
+          "properties": {
+            "eligibleFiles": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "filesExamined": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "filesPartiallyExamined": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "filesNotExamined": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "filesInvestigated": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "eligibleLines": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "linesExamined": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "regionsPlanned": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "regionsByState": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "examined",
+                "examined-cached",
+                "not-examined-budget",
+                "not-examined-failed",
+                "not-examined-withheld"
+              ],
+              "properties": {
+                "examined": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "examined-cached": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "not-examined-budget": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "not-examined-failed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "not-examined-withheld": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "regions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "startLine",
+                  "endLine",
+                  "state"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "startLine": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "endLine": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "state": {
+                    "enum": [
+                      "examined",
+                      "examined-cached",
+                      "not-examined-budget",
+                      "not-examined-failed",
+                      "not-examined-withheld"
+                    ]
+                  }
+                }
+              }
+            },
+            "regionsOmitted": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "complete": {
+              "type": "boolean",
+              "description": "Every eligible region was examined by a model. Never a statement that the code is free of defects."
+            }
+          }
+        },
+        "hypotheses": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "proposed",
+            "ungrounded",
+            "duplicates",
+            "coveredByRule",
+            "rejectedByReview",
+            "recorded",
+            "byReview",
+            "reachabilityUnproven",
+            "verificationFailed"
+          ],
+          "properties": {
+            "proposed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ungrounded": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "duplicates": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "coveredByRule": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rejectedByReview": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "recorded": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "byReview": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "not-reviewed",
+                "model-supported",
+                "inconclusive",
+                "model-disputed"
+              ],
+              "properties": {
+                "not-reviewed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "model-supported": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "inconclusive": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "model-disputed": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "verificationFailed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reachabilityUnproven": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "dismissed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "title",
+              "reason"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "title": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "dismissedOmitted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limits": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "pipeline": {
+          "enum": [
+            "smart",
+            "deep"
+          ]
+        },
+        "verifier": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "providerId",
+            "modelId",
+            "independent",
+            "sameModelFamily"
+          ],
+          "properties": {
+            "providerId": {
+              "type": "string"
+            },
+            "modelId": {
+              "type": "string"
+            },
+            "independent": {
+              "type": "boolean"
+            },
+            "sameModelFamily": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "description": "What semantic discovery did. Present only when it was requested (conclave audit --semantic)."
+    }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "reason"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "relation": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "coverageGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "reason"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "safety-excluded-path",
+            "safety-excluded-content",
+            "ignored",
+            "unsupported-language",
+            "parser-failure",
+            "binary",
+            "oversized",
+            "symlink",
+            "unreadable"
+          ]
+        },
+        "detail": {
+          "type": "string"
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "fingerprint",
+        "ruleId",
+        "category",
+        "severity",
+        "title",
+        "explanation",
+        "remediation",
+        "location",
+        "evidence",
+        "origin",
+        "status",
+        "snapshot",
+        "limitations",
+        "evidenceDigest"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "parse",
+            "reliability",
+            "correctness",
+            "structure"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "explanation": {
+          "type": "string"
+        },
+        "remediation": {
+          "type": "string"
+        },
+        "location": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "startLine": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "endLine": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "symbol": {
+              "type": "string"
+            }
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "origin": {
+          "enum": [
+            "deterministic-rule",
+            "ai-hypothesis"
+          ],
+          "description": "ai-hypothesis appears only when semantic discovery was requested; it is a model's unconfirmed reading of the source."
+        },
+        "status": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ruleMatched",
+            "evidence",
+            "reproduction",
+            "humanConfirmation",
+            "publication"
+          ],
+          "properties": {
+            "ruleMatched": {
+              "type": "boolean",
+              "description": "False for an ai-hypothesis finding."
+            },
+            "evidence": {
+              "const": "source-located"
+            },
+            "reproduction": {
+              "enum": [
+                "not-attempted",
+                "reproduced",
+                "not-reproduced"
+              ]
+            },
+            "humanConfirmation": {
+              "enum": [
+                "none",
+                "confirmed",
+                "dismissed"
+              ]
+            },
+            "publication": {
+              "enum": [
+                "not-requested",
+                "approved"
+              ]
+            }
+          }
+        },
+        "snapshot": {
+          "type": "string"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "suppression": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "directive"
+          ],
+          "properties": {
+            "directive": {
+              "const": "conclave-ignore"
+            }
+          }
+        },
+        "evidenceDigest": {
+          "type": "string"
+        },
+        "baseline": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "createdAt"
+          ],
+          "properties": {
+            "createdAt": {
+              "type": "string"
+            }
+          }
+        },
+        "applicability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "role",
+            "issueProposals",
+            "gate",
+            "reason",
+            "source"
+          ],
+          "properties": {
+            "role": {
+              "type": "string"
+            },
+            "issueProposals": {
+              "type": "boolean"
+            },
+            "gate": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            }
+          }
+        },
+        "hypothesis": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Present exactly when origin is ai-hypothesis.",
+          "required": [
+            "providerId",
+            "modelId",
+            "defectClass",
+            "confidence",
+            "trigger",
+            "consequence",
+            "grounding",
+            "review",
+            "triggerKind"
+          ],
+          "properties": {
+            "providerId": {
+              "type": "string"
+            },
+            "modelId": {
+              "type": "string"
+            },
+            "defectClass": {
+              "enum": [
+                "authorization",
+                "logic",
+                "boundary",
+                "async",
+                "fallback",
+                "cache",
+                "state",
+                "resource",
+                "error-handling",
+                "contract",
+                "other"
+              ]
+            },
+            "confidence": {
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ],
+              "description": "The model's own estimate; not calibrated."
+            },
+            "trigger": {
+              "type": "string"
+            },
+            "consequence": {
+              "type": "string"
+            },
+            "grounding": {
+              "const": "quote-located"
+            },
+            "review": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "modelCalls"
+              ],
+              "properties": {
+                "status": {
+                  "enum": [
+                    "not-reviewed",
+                    "model-supported",
+                    "inconclusive",
+                    "model-disputed"
+                  ]
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "modelCalls": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "verifier": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "providerId",
+                    "modelId",
+                    "independent",
+                    "sameModelFamily"
+                  ],
+                  "properties": {
+                    "providerId": {
+                      "type": "string"
+                    },
+                    "modelId": {
+                      "type": "string"
+                    },
+                    "independent": {
+                      "type": "boolean"
+                    },
+                    "sameModelFamily": {
+                      "type": "boolean"
+                    }
+                  }
+                },
+                "explanation": {
+                  "type": "string"
+                }
+              }
+            },
+            "triggerKind": {
+              "enum": [
+                "normal-use",
+                "invalid-input"
+              ]
+            },
+            "reachedBy": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "line"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "reachability": {
+              "enum": [
+                "call-site-cited",
+                "unproven"
+              ],
+              "description": "Present for invalid-input. unproven is an absence of evidence, not proof the input cannot arrive."
+            }
+          }
+        }
+      }
+    },
+    "ruleExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ruleId",
+        "category",
+        "status",
+        "filesExamined",
+        "matches",
+        "durationMs",
+        "limitation"
+      ],
+      "properties": {
+        "ruleId": {
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "parse",
+            "reliability",
+            "correctness",
+            "structure"
+          ]
+        },
+        "status": {
+          "enum": [
+            "executed",
+            "skipped"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "filesExamined": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matches": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "limitation": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

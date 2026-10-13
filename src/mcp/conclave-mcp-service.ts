@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { EXCLUDED_CONTEXT_MARKER, redactSecrets } from "../security/model-context.js";
 
 import { MultiLanguageCodeParser } from "../code-intelligence/multi-language-parser.js";
 import type { Evidence } from "../domain/evidence.js";
@@ -53,8 +54,14 @@ function boundedInteger(value: unknown, name: string, fallback: number, maximum:
   return value;
 }
 
+/** MCP results are read by a model client, so excerpts cross the same boundary as provider requests. Redaction precedes truncation. */
+function outgoingExcerpt(excerpt: string): string {
+  const result = redactSecrets(excerpt);
+  return result.residual ? EXCLUDED_CONTEXT_MARKER : result.text.slice(0, 6_000);
+}
+
 function evidenceView(evidence: Evidence): McpEvidenceView {
-  return { id: evidence.id, path: evidence.path, startLine: evidence.startLine, endLine: evidence.endLine, ...(evidence.symbol === undefined ? {} : { symbol: evidence.symbol }), excerpt: evidence.excerpt.slice(0, 6_000), provenance: evidence.provenance.origin };
+  return { id: evidence.id, path: evidence.path, startLine: evidence.startLine, endLine: evidence.endLine, ...(evidence.symbol === undefined ? {} : { symbol: evidence.symbol }), excerpt: outgoingExcerpt(evidence.excerpt), provenance: evidence.provenance.origin };
 }
 
 function validationSource(input: Readonly<Record<string, unknown>>): ChangeSource {
@@ -213,7 +220,7 @@ export class ConclaveMcpService {
         if (this.#reasoning === undefined) throw new McpInputError("Reasoning is unavailable until a server-side provider is configured");
         const result = await this.#reasoning.ask(string(input["question"], "question"), name === "conclave_ask" ? "investigator-judge" : "conclave");
         evidenceCount = result.verdict.evidence.length; operations = result.metrics.deterministicOperations;
-        value = { repositoryEvidenceUntrusted: true, verdict: { answer: result.verdict.answer, supportedClaims: result.verdict.claims.supported.map((claim) => ({ id: claim.id, statement: claim.statement, evidenceIds: claim.evidenceIds })), rejectedClaims: result.verdict.claims.rejected.map((claim) => ({ id: claim.id, statement: claim.statement })), uncertainClaims: result.verdict.claims.uncertain.map((claim) => ({ id: claim.id, statement: claim.statement })), evidence: result.verdict.evidence.map(evidenceView) }, metrics: { retrievalRounds: result.metrics.retrievalRounds, modelCalls: result.metrics.modelCalls, approximateContextTokens: result.metrics.approximateInputTokens } };
+        value = { repositoryEvidenceUntrusted: true, verdict: { answer: result.verdict.answer, supportedClaims: result.verdict.claims.supported.map((claim) => ({ id: claim.id, statement: claim.statement, evidenceIds: claim.evidenceIds })), rejectedClaims: result.verdict.claims.rejected.map((claim) => ({ id: claim.id, statement: claim.statement })), uncertainClaims: result.verdict.claims.uncertain.map((claim) => ({ id: claim.id, statement: claim.statement })), evidence: result.verdict.evidence.map(evidenceView) }, metrics: { retrievalRounds: result.metrics.retrievalRounds, modelCalls: result.metrics.modelCalls, approximateContextTokens: result.metrics.approximateInputTokens }, ...(result.contextProtection === undefined ? {} : { contextProtection: result.contextProtection }) };
         break;
       }
       default: throw new McpInputError(`Unknown read-only MCP tool: ${name}`);

@@ -1,3 +1,5 @@
+import type { SemanticDisclosure } from "../analysis/semantic-setup.js";
+import type { SemanticBudget } from "../domain/audit.js";
 import type { ChangeSource, ValidationReport } from "../domain/validation.js";
 import type { ProviderId } from "../domain/provider.js";
 import type { ProviderDiagnostics } from "../providers/provider-diagnostics.js";
@@ -185,4 +187,62 @@ export interface RuntimeModelsView {
   readonly provider: ConfigurableProviderId;
   readonly endpoint: string;
   readonly models: readonly string[];
+}
+
+/** `static`: rules only, no model. `smart`: discovery and one verifier. `deep`: discovery and the five roles. */
+export const AUDIT_MODES = ["static", "smart", "deep"] as const;
+export type AuditMode = (typeof AUDIT_MODES)[number];
+
+/** What starting an audit in this mode would do, read before starting it. Calls no model. */
+export interface AuditPreflightView {
+  readonly mode: AuditMode;
+  /** False when the mode cannot run as configured; `reason` says why. */
+  readonly available: boolean;
+  readonly reason?: string;
+  /** Present for `smart` and `deep` when a provider is configured. */
+  readonly disclosure?: SemanticDisclosure;
+  /** Regions an earlier semantic audit already examined; they cost no call when unchanged. */
+  readonly cachedRegions: number;
+}
+
+export interface AuditStartRequest {
+  readonly projectId: string;
+  readonly mode: AuditMode;
+  /**
+   * Required true for `smart` and `deep`: the person saw which provider receives source and
+   * accepted that model calls will be made. Never defaulted.
+   */
+  readonly acknowledgedModelCalls?: boolean;
+  readonly budget?: Partial<SemanticBudget>;
+  readonly discoveryModel?: string;
+  readonly verifierModel?: string;
+}
+
+/** One audit run started from the cockpit. Held in memory: it does not survive a server restart. */
+export interface AuditJobView {
+  readonly id: string;
+  readonly mode: AuditMode;
+  readonly state: "running" | "completed" | "failed";
+  readonly startedAt: string;
+  readonly finishedAt?: string;
+  /** Latest progress lines, oldest first. Paths and counts only, never source. */
+  readonly progress: readonly string[];
+  readonly error?: string;
+}
+
+export interface ArchitectureView {
+  readonly files: number;
+  readonly symbols: number;
+  readonly relations: number;
+  readonly languages: readonly { readonly language: string; readonly files: number }[];
+  /** Directories, by the first two path segments. */
+  readonly modules: readonly { readonly name: string; readonly files: number; readonly symbols: number; readonly dependsOn: number; readonly usedBy: number }[];
+  /** Relations between modules, aggregated from resolved file and symbol relations. */
+  readonly dependencies: readonly { readonly from: string; readonly to: string; readonly relations: number }[];
+  /** Files with the most relations to other files. */
+  readonly hubs: readonly { readonly path: string; readonly incoming: number; readonly outgoing: number }[];
+  /** Entries the index saw and did not analyze, per reason. */
+  readonly notIndexed: readonly { readonly reason: string; readonly entries: number }[];
+  /** Lists above are capped; this says how many modules and dependencies were left out. */
+  readonly omitted: { readonly modules: number; readonly dependencies: number };
 }

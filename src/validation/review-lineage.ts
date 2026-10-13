@@ -262,6 +262,7 @@ export function createFindingLifecycle(
   lineage: ValidationLineage,
   previousReport?: ValidationReport,
   stagnationThreshold = 3,
+  legacyFingerprints: ReadonlyMap<string, string> = new Map(),
 ): ValidationFindingLifecycle {
   const currentFingerprints = sortedUnique(findings.map((item) => item.fingerprint));
   const threshold = Number.isInteger(stagnationThreshold) && stagnationThreshold >= 2 && stagnationThreshold <= 20
@@ -284,17 +285,22 @@ export function createFindingLifecycle(
   const previousCurrent = new Map(previousReport.findingLifecycle.current.map((item) => [item.fingerprint, item]));
   const previousSeen = new Set(previousReport.findingLifecycle.seen);
   const duplicate = lineage.diffDigest === previousReport.lineage.diffDigest;
+  // A previous report written before location anchors knows a finding by its older, coarser
+  // fingerprint. Following that alias keeps such a finding persistent instead of reporting it
+  // as resolved and reintroduced on the first review after an upgrade.
+  const legacyOf = (fingerprint: string): string => legacyFingerprints.get(fingerprint) ?? fingerprint;
   const current = currentFingerprints.map((fingerprint) => {
-    const prior = previousCurrent.get(fingerprint);
-    const status = prior !== undefined ? "persistent" as const : previousSeen.has(fingerprint) ? "regressed" as const : "new" as const;
+    const prior = previousCurrent.get(fingerprint) ?? previousCurrent.get(legacyOf(fingerprint));
+    const seenBefore = previousSeen.has(fingerprint) || previousSeen.has(legacyOf(fingerprint));
+    const status = prior !== undefined ? "persistent" as const : seenBefore ? "regressed" as const : "new" as const;
     return {
       fingerprint,
       status,
-      occurrences: (prior?.occurrences ?? (previousSeen.has(fingerprint) ? 1 : 0)) + 1,
+      occurrences: (prior?.occurrences ?? (seenBefore ? 1 : 0)) + 1,
       consecutive: prior === undefined ? 1 : duplicate ? prior.consecutive : prior.consecutive + 1,
     };
   });
-  const currentSet = new Set(currentFingerprints);
+  const currentSet = new Set(currentFingerprints.flatMap((fingerprint) => [fingerprint, legacyOf(fingerprint)]));
   const resolved = [...previousCurrent.keys()].filter((fingerprint) => !currentSet.has(fingerprint)).sort();
   const stagnating = duplicate
     ? []

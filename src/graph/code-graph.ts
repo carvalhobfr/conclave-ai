@@ -9,9 +9,42 @@ import type {
   RepositoryCodeIndex,
 } from "../domain/code-index.js";
 
-const SOURCE_EXTENSIONS = [
-  ".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs", ".py", ".pyw", ".java",
-];
+type ImporterFamily = "javascript" | "python" | "java";
+
+/**
+ * Extensions an extensionless specifier may resolve to. A specifier only ever resolves inside
+ * its importer's language family: `./config` in TypeScript never means `config.py`.
+ */
+const FAMILY_EXTENSIONS: Readonly<Record<ImporterFamily, readonly string[]>> = {
+  javascript: [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs"],
+  python: [".py", ".pyw"],
+  java: [".java"],
+};
+
+/**
+ * TypeScript projects that emit ES modules (NodeNext, Node16, or a bundler with explicit
+ * extensions) name the emitted file in the specifier: `./store.js` is written in `store.ts`.
+ * Each entry is the inverse of the compiler's emit: the sources that produce that output.
+ */
+const SOURCES_FOR_OUTPUT_EXTENSION: Readonly<Record<string, readonly string[]>> = {
+  ".js": [".ts", ".tsx"],
+  ".jsx": [".tsx"],
+  ".mjs": [".mts"],
+  ".cjs": [".cts"],
+};
+
+export type ImportResolution =
+  | { readonly status: "resolved"; readonly path: string }
+  /** More than one indexed source would emit the imported output; no edge is drawn. */
+  | { readonly status: "ambiguous"; readonly candidates: readonly string[] }
+  | { readonly status: "unresolved" };
+
+const UNRESOLVED: ImportResolution = { status: "unresolved" };
+
+function importerFamily(language: IndexedFile["language"]): ImporterFamily {
+  if (language === "python" || language === "java") return language;
+  return "javascript";
+}
 
 function fileNode(path: string): GraphNodeReference {
   return { kind: "file", id: path };
@@ -38,15 +71,26 @@ function createEdge(edge: Omit<GraphEdge, "id">): GraphEdge {
   return { id: edgeId(edge), ...edge };
 }
 
-function resolveImportPath(
+/**
+ * Resolves an import specifier to an indexed file, or reports why no edge may be drawn.
+ *
+ * 1. A specifier that names an indexed file literally resolves to that file.
+ * 2. Otherwise a JavaScript output extension maps back to the TypeScript source that emits it.
+ *    Two sources emitting the same output (`a.ts` beside `a.tsx`) are ambiguous, not guessed.
+ * 3. Otherwise a specifier without a source extension gains one, then tries a directory index.
+ *
+ * A specifier with a recognised source extension never falls through to step 3: `./a.js` does
+ * not mean `./a/index.ts`.
+ */
+export function resolveImport(
   importerPath: string,
   source: string,
   importerLanguage: IndexedFile["language"],
   files: Readonly<Record<string, IndexedFile>>,
-): string | undefined {
+): ImportResolution {
   const relative = source.startsWith(".");
-  const moduleImport = importerLanguage === "python" || importerLanguage === "java";
-  if (!relative && !moduleImport) return undefined;
+  const family = importerFamily(importerLanguage);
+  if (!relative && family === "javascript") return UNRESOLVED;
   const importerDirectory = dirname(importerPath).replaceAll("\\", "/");
   let relativeDirectory = importerDirectory;
   let relativeSource = source;
@@ -59,15 +103,32 @@ function resolveImportPath(
   const base = relative
     ? posix.normalize(posix.join(relativeDirectory, relativeSource.replace(/^\//, "")))
     : posix.normalize(normalizedSource);
-  const candidates = [base];
-  if (extname(base) === "") {
-    for (const extension of SOURCE_EXTENSIONS) {
-      candidates.push(`${base}${extension}`);
-      candidates.push(`${base}/index${extension}`);
+  // Own-property lookup: a persisted index is a plain object, where `files["constructor"]` exists.
+  const indexed = (candidate: string): boolean => Object.hasOwn(files, candidate);
+  if (indexed(base)) return { status: "resolved", path: base };
+
+  const extension = extname(base);
+  if (family === "javascript") {
+    const sourceExtensions = SOURCES_FOR_OUTPUT_EXTENSION[extension];
+    if (sourceExtensions !== undefined) {
+      const stem = base.slice(0, -extension.length);
+      const sources = sourceExtensions.map((candidate) => `${stem}${candidate}`).filter(indexed);
+      const [only] = sources;
+      if (only === undefined) return UNRESOLVED;
+      return sources.length === 1 ? { status: "resolved", path: only } : { status: "ambiguous", candidates: sources };
     }
-    if (importerLanguage === "python") candidates.push(`${base}/__init__.py`);
   }
-  return candidates.find((candidate) => files[candidate] !== undefined);
+  if (FAMILY_EXTENSIONS[family].includes(extension)) return UNRESOLVED;
+
+  // No source extension (`./store`, or a dotted basename such as `./user.service`).
+  const candidates: string[] = [];
+  for (const candidate of FAMILY_EXTENSIONS[family]) {
+    candidates.push(`${base}${candidate}`);
+    if (family === "javascript") candidates.push(`${base}/index${candidate}`);
+  }
+  if (family === "python") candidates.push(`${base}/__init__.py`);
+  const path = candidates.find(indexed);
+  return path === undefined ? UNRESOLVED : { status: "resolved", path };
 }
 
 function unitsByPath(
@@ -180,10 +241,11 @@ export function buildCodeGraph(
   for (const file of Object.values(files)) {
     const importedTargets = new Map<string, IndexedCodeUnit>();
     for (const importReference of file.imports) {
-      const targetPath = resolveImportPath(file.path, importReference.source, file.language, files);
-      if (targetPath === undefined) {
+      const resolution = resolveImport(file.path, importReference.source, file.language, files);
+      if (resolution.status !== "resolved") {
         continue;
       }
+      const targetPath = resolution.path;
       add({
         from: fileNode(file.path),
         to: fileNode(targetPath),

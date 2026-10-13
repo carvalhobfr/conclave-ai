@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import type {
   GraphEdge,
   GraphNodeReference,
@@ -24,17 +22,17 @@ import { createChallengePlan } from "./challenge-router.js";
 import { assessEscalation } from "./escalation.js";
 import { evaluateEvidenceReceipts } from "./evidence-receipts.js";
 import { evaluateCriteria } from "./acceptance-criteria.js";
-import { analyzeSourceDefects } from "./source-defects.js";
+import { assessCoverage, coverageWarnings } from "./coverage.js";
+import { runRules } from "../analysis/pipeline.js";
+import { AnalysisContext, changeScopeFiles } from "../analysis/rule.js";
+import { CHANGE_RULES } from "../analysis/rules.js";
+import { assignFindingIdentities, occurrenceAnchor, stableId } from "./finding-identity.js";
 import { applyInlineSuppressions } from "./finding-suppression.js";
 import {
   createFindingLifecycle,
   createValidationLineage,
   finalizeReportDigest,
 } from "./review-lineage.js";
-
-function stableId(kind: string, ...parts: readonly string[]): string {
-  return kind + "_" + createHash("sha256").update(parts.join("\0")).digest("hex").slice(0, 20);
-}
 
 function nodeKey(node: GraphNodeReference): string {
   return node.kind + ":" + node.id;
@@ -309,6 +307,14 @@ export class SuperValidator {
     const started = performance.now();
     let deterministicChecks = 0;
     const findings: ValidationFinding[] = [];
+    // Findings that point at one source location are anchored to it, so two of the same kind
+    // in one file stay distinct. Aggregate findings keep their evidence-based fingerprint.
+    const anchors = new Map<ValidationFinding, string>();
+    const located = (item: ValidationFinding): ValidationFinding => {
+      const anchor = occurrenceAnchor(index, item.evidence[0]);
+      if (anchor !== undefined) anchors.set(item, anchor);
+      return item;
+    };
     const changedPaths = new Set(changeSet.files.map((file) => file.path));
     const changedUnits = Object.values(index.units).filter((unit) => {
       const file = changeSet.files.find((item) => item.path === unit.path);
@@ -355,41 +361,34 @@ export class SuperValidator {
       }
     }
 
-    for (const changed of changeSet.files) {
-      const file = index.files[changed.path];
-      if (file !== undefined) {
-        deterministicChecks += 1;
-        for (const diagnostic of file.diagnostics.slice(0, 20)) {
-          findings.push(finding(
-            "parser-diagnostic",
-            "blocking",
-            "Changed source has a parser diagnostic",
-            diagnostic.message,
-            "Repair the syntax or parser-visible structural error before accepting the resolution.",
-            [{
-              path: changed.path,
-              startLine: diagnostic.line,
-              endLine: diagnostic.line,
-              reason: "Language parser diagnostic",
-            }],
-          ));
-        }
-      }
+    // The same rules a repository audit runs, restricted here to the lines this change touched.
+    const changedFiles = changeScopeFiles(index, changeSet.files);
+    const analysis = runRules(CHANGE_RULES, new AnalysisContext("change", index, changedFiles));
+    deterministicChecks += [...analysis.examined.values()].reduce((total, paths) => total + paths.length, 0);
+    for (const match of analysis.matches.filter((item) => item.ruleId === "parser-diagnostic")) {
+      findings.push(located(finding("parser-diagnostic", "blocking", match.title, match.detail, match.remediation, match.evidence)));
+    }
+
+    // A changed file that is absent from the index was not analyzed. Saying so is the only
+    // honest result: no rule ran on it, so neither a finding nor a clean pass describes it.
+    deterministicChecks += 1;
+    const coverage = assessCoverage(index, changeSet.files);
+    const unanalyzed = coverageWarnings(coverage);
+    for (const gap of unanalyzed) {
+      findings.push(finding("coverage-gap", "warning", gap.title, gap.detail, gap.remediation, gap.evidence));
     }
 
     // Text-visible defect classes the graph cannot express. These cost no model call, so the
     // free review path reports them too.
-    const sourceAnalysis = analyzeSourceDefects(index, changeSet.files);
-    deterministicChecks += sourceAnalysis.checksPerformed;
-    for (const defect of sourceAnalysis.defects) {
-      findings.push(finding(
-        defect.kind,
-        "warning",
-        defect.title,
-        defect.detail,
-        defect.remediation,
-        [defect.evidence],
-      ));
+    const fileOrder = new Map(changedFiles.map((file, position) => [file.path, position]));
+    const defects = analysis.matches
+      .filter((item) => item.ruleId !== "parser-diagnostic")
+      // Source order within each file, files in change order: the order reports have always had.
+      .sort((left, right) =>
+        (fileOrder.get(left.evidence[0]?.path ?? "") ?? 0) - (fileOrder.get(right.evidence[0]?.path ?? "") ?? 0) ||
+        left.sequence - right.sequence);
+    for (const match of defects) {
+      findings.push(located(finding(match.ruleId as ValidationFindingKind, "warning", match.title, match.detail, match.remediation, match.evidence)));
     }
 
     deterministicChecks += 1;
@@ -572,7 +571,8 @@ export class SuperValidator {
       ));
     }
 
-    findings.splice(0, findings.length, ...applyInlineSuppressions(index, findings));
+    const identities = assignFindingIdentities(findings, anchors);
+    findings.splice(0, findings.length, ...applyInlineSuppressions(index, identities.findings));
     const verdict = verdictFor(findings, claims);
     const counts = {
       blocking: findings.filter((item) => item.severity === "blocking").length,
@@ -583,6 +583,7 @@ export class SuperValidator {
       lineage,
       lineage.baselineTrust === "invalid" || lineage.rebaselineRequired ? undefined : effectivePrevious,
       context.stagnationThreshold,
+      identities.legacyFingerprints,
     );
     const challengePlan = createChallengePlan(
       changeSet,
@@ -591,13 +592,15 @@ export class SuperValidator {
       impactedFiles,
       findings,
     );
+    const unanalyzedFiles = unanalyzed.reduce((total, gap) => total + gap.count, 0);
     const report: ValidationReport = {
       schemaVersion: 5,
       criteria: evaluateCriteria(contract.criteria ?? [], claims, receipts, lineage.rebaselineRequired ? undefined : effectivePrevious),
       verdict,
       summary:
         verdict.toUpperCase() + ": " + String(counts.blocking) + " blocking, " +
-        String(counts.warning) + " warning; " + String(impactedFiles.size) + " impacted file(s).",
+        String(counts.warning) + " warning; " + String(impactedFiles.size) + " impacted file(s)." +
+        (unanalyzedFiles === 0 ? "" : " " + String(unanalyzedFiles) + " changed file(s) not analyzed."),
       objective: contract.objective,
       changeSet: {
         source: changeSet.source,
@@ -644,6 +647,7 @@ export class SuperValidator {
         files: changeSet.files,
         indexedPaths: new Set(Object.keys(index.files)),
       }),
+      coverage,
     };
     return finalizeReportDigest(report);
   }

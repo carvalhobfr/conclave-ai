@@ -5,6 +5,8 @@ import {
   CODE_INDEXING_VERSION,
   UnsupportedCodeIndexSchemaError,
   type CodeIndexStore,
+  type CoverageGap,
+  type CoverageGapReason,
   type IndexedCodeUnit,
   type IndexedFile,
   type IndexUpdateResult,
@@ -13,7 +15,7 @@ import {
 import type { CodeParser, StructuralCodeUnit } from "../domain/code-intelligence.js";
 import type { EmbeddingProvider, EmbeddingRequest } from "../domain/embedding.js";
 import { NullRetrievalEventSink, type RetrievalEventSink } from "../domain/observability.js";
-import type { RepositorySource } from "../domain/repository.js";
+import type { RepositoryExclusionReason, RepositorySource } from "../domain/repository.js";
 import { createLexicalDocument } from "../retrieval/tokenizer.js";
 import { buildCodeGraph } from "../graph/code-graph.js";
 
@@ -44,6 +46,15 @@ function emptyStats(): MutableIndexStats {
     embeddingCacheHits: 0,
   };
 }
+
+const EXCLUSION_GAP_REASON: Readonly<Record<RepositoryExclusionReason, CoverageGapReason>> = {
+  "sensitive-path": "safety-excluded-path",
+  ignored: "ignored",
+  symlink: "symlink",
+  binary: "binary",
+  oversized: "oversized",
+  unreadable: "unreadable",
+};
 
 function embeddingKey(providerId: string, unit: StructuralCodeUnit): string {
   return createHash("sha256")
@@ -138,10 +149,21 @@ export class RepositoryIndexer {
       readonly number[]
     >;
     const pendingEmbeddings = new Map<string, EmbeddingRequest>();
+    // Every entry that exists in the repository but will be absent from the index, with the
+    // reason. Paths and categories only: a gap never carries file content.
+    const gaps: CoverageGap[] = (snapshot.exclusions ?? []).map((exclusion) => ({
+      path: exclusion.relativePath,
+      reason: EXCLUSION_GAP_REASON[exclusion.reason],
+    }));
 
     for (const file of snapshot.files) {
       if (!file.safety.externalTransmissionAllowed) {
         stats.filesSkippedSecret += 1;
+        gaps.push({
+          path: file.relativePath,
+          reason: "safety-excluded-content",
+          detail: [...new Set(file.safety.findings.filter((item) => item.severity === "block").map((item) => item.kind))].sort().join(", "),
+        });
         this.#events.emit({
           type: "file_skipped",
           occurredAt: new Date().toISOString(),
@@ -153,6 +175,7 @@ export class RepositoryIndexer {
       }
       if (!this.#parser.supports(file.language)) {
         stats.filesSkippedUnsupported += 1;
+        gaps.push({ path: file.relativePath, reason: "unsupported-language" });
         continue;
       }
 
@@ -185,6 +208,7 @@ export class RepositoryIndexer {
         parsed = this.#parser.parse(file);
       } catch {
         stats.parserFailures += 1;
+        gaps.push({ path: file.relativePath, reason: "parser-failure" });
         this.#events.emit({
           type: "file_skipped",
           occurredAt: new Date().toISOString(),
@@ -275,6 +299,7 @@ export class RepositoryIndexer {
       units,
       embeddingCache,
       graphEdges: buildCodeGraph(files, units),
+      coverage: { gaps: gaps.sort((left, right) => left.path.localeCompare(right.path)) },
       createdAt: previous?.createdAt ?? now,
       updatedAt: now,
     };

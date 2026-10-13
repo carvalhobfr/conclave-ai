@@ -73,6 +73,15 @@ async function defaultBase(root: string, current: string): Promise<string> {
   return "HEAD";
 }
 
+/**
+ * The checked-out commit, or undefined outside a Git work tree. `rev-parse` reads refs only:
+ * it runs no hook and no repository-configured program.
+ */
+export async function headCommit(path: string): Promise<string | undefined> {
+  const value = await successful(resolve(path), ["rev-parse", "--verify", "HEAD^{commit}"]).catch(() => undefined);
+  return value !== undefined && /^[a-f0-9]{40,64}$/u.test(value) ? value : undefined;
+}
+
 export async function inspectRepository(path: string): Promise<RepositoryInspection> {
   const requested = resolve(path);
   const rootValue = await successful(requested, ["rev-parse", "--show-toplevel"]);

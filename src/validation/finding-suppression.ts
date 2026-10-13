@@ -12,6 +12,14 @@ function directiveKinds(line: string | undefined): readonly string[] | "all" | u
   return listed === undefined || listed.length === 0 ? "all" : listed;
 }
 
+/** Whether a `conclave-ignore` directive on the line, or the line above, names this kind (or every kind). */
+export function hasIgnoreDirective(lines: readonly string[], line: number, kind: string): boolean {
+  return [lines[line - 1], lines[line - 2]].some((candidate) => {
+    const kinds = directiveKinds(candidate);
+    return kinds !== undefined && (kinds === "all" || kinds.includes(kind));
+  });
+}
+
 /**
  * Applies inline `conclave-ignore` directives found on a finding's line or the line above it.
  * A suppressed warning is kept as `info` with the reason, so the decision stays auditable in the

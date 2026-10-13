@@ -4,8 +4,12 @@ import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadConclaveEnvironment } from "../config/environment-file.js";
+import { FINDING_DISPOSITIONS, FINDING_LIFECYCLE_STATES } from "../domain/finding-ledger.js";
+import { PROPOSAL_STATUSES } from "../domain/issue-proposal.js";
 import type { ChangeSource } from "../domain/validation.js";
-import { REASONING_ROLE_NAMES, type ConfigurableProviderId, type ReasoningRoleName, type RoleModelChoice, type RuntimeConfigurationRequest, type RuntimeModelDiscoveryRequest } from "./contracts.js";
+import type { ProposalEdit } from "../validation/issue-proposal.js";
+import type { FindingFilter } from "../workflow/triage-service.js";
+import { AUDIT_MODES, REASONING_ROLE_NAMES, type AuditStartRequest, type ConfigurableProviderId, type ReasoningRoleName, type RoleModelChoice, type RuntimeConfigurationRequest, type RuntimeModelDiscoveryRequest } from "./contracts.js";
 import { ConclaveProductService, ProductServiceError } from "./product-service.js";
 
 const BODY_LIMIT_BYTES = 64_000;
@@ -46,6 +50,71 @@ async function body(request: IncomingMessage): Promise<Record<string, unknown>> 
 function string(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim() === "") throw new ProductServiceError("invalid_request", `${label} is required.`, "Provide the missing value.");
   return value;
+}
+
+function optionalString(value: unknown, label: string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw new ProductServiceError("invalid_request", `${label} must be text.`, "Provide text or leave it out.");
+  return value;
+}
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], label: string): T {
+  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) throw new ProductServiceError("invalid_request", `${label} must be one of: ${allowed.join(", ")}.`, "Select a supported value.");
+  return value as T;
+}
+
+function listOf<T extends string>(value: string | null, allowed: readonly T[], label: string): readonly T[] | undefined {
+  if (value === null || value === "") return undefined;
+  return value.split(",").map((item) => oneOf(item.trim(), allowed, label));
+}
+
+function findingFilter(parameters: URLSearchParams): FindingFilter {
+  const states = listOf(parameters.get("state"), FINDING_LIFECYCLE_STATES, "State");
+  const dispositions = listOf(parameters.get("disposition"), FINDING_DISPOSITIONS, "Disposition");
+  const severity = parameters.get("severity");
+  const rule = parameters.get("rule");
+  const path = parameters.get("path");
+  const baselined = parameters.get("baselined");
+  return {
+    ...(states === undefined ? {} : { states }),
+    ...(dispositions === undefined ? {} : { dispositions }),
+    ...(severity === null ? {} : { severity: oneOf(severity, ["high", "medium", "low"] as const, "Severity") }),
+    ...(rule === null ? {} : { ruleId: rule }),
+    ...(path === null ? {} : { path }),
+    suppressed: parameters.get("suppressed") === "true",
+    ...(baselined === null ? {} : { baselined: baselined === "true" }),
+  };
+}
+
+function proposalEdit(payload: Record<string, unknown>): ProposalEdit {
+  const title = optionalString(payload["title"], "Title");
+  const text = optionalString(payload["body"], "Body");
+  const labels = payload["labels"];
+  if (labels !== undefined && (!Array.isArray(labels) || labels.some((label) => typeof label !== "string"))) throw new ProductServiceError("invalid_request", "Labels must be a list of text values.", "Provide labels as a list.");
+  return { ...(title === undefined ? {} : { title }), ...(text === undefined ? {} : { body: text }), ...(labels === undefined ? {} : { labels: labels as readonly string[] }) };
+}
+
+const BUDGET_FIELDS = ["maxModelCalls", "maxInputTokens", "maxOutputTokens", "maxDurationMs", "maxRegions", "maxInvestigations"] as const;
+
+/** Budget and model overrides of an audit request. Anything not a bounded whole number or a model name is refused. */
+function auditOptions(source: (name: string) => unknown): Pick<AuditStartRequest, "budget" | "discoveryModel" | "verifierModel"> {
+  const budget: Record<string, number> = {};
+  for (const field of BUDGET_FIELDS) {
+    const raw = source(field);
+    if (raw === undefined || raw === null || raw === "") continue;
+    const value = Number(raw);
+    if (!Number.isInteger(value) || value < (field === "maxInvestigations" ? 0 : 1) || value > 100_000_000) throw new ProductServiceError("invalid_request", `${field} must be a whole number.`, "Enter a positive whole number or leave it empty.");
+    budget[field] = value;
+  }
+  const model = (name: string): string | undefined => {
+    const raw = source(name);
+    if (raw === undefined || raw === null || raw === "") return undefined;
+    // eslint-disable-next-line no-control-regex
+    if (typeof raw !== "string" || raw.length > 200 || /[\u0000-\u001f]/u.test(raw)) throw new ProductServiceError("invalid_request", `${name} must be a model name.`, "Enter a model name or leave it empty.");
+    return raw.trim();
+  };
+  const [discoveryModel, verifierModel] = [model("discoveryModel"), model("verifierModel")];
+  return { ...(Object.keys(budget).length === 0 ? {} : { budget }), ...(discoveryModel === undefined ? {} : { discoveryModel }), ...(verifierModel === undefined ? {} : { verifierModel }) };
 }
 
 function runtimeConfiguration(payload: Record<string, unknown>): RuntimeConfigurationRequest {
@@ -273,6 +342,57 @@ export function createConclaveWebServer(options: ConclaveWebServerOptions = {}) 
       if (url.pathname === "/api/feedback" && request.method === "POST") {
         const payload = await body(request);
         send(response, 200, await product.saveFeedback(string(payload["projectId"], "Project"), string(payload["reviewId"], "Review"), payload["feedback"])); return;
+      }
+      // Audit triage. Reads are GET; every change is a guarded JSON POST. No route publishes anything.
+      if (url.pathname === "/api/audit/latest" && request.method === "GET") { send(response, 200, { report: await product.latestAudit(string(url.searchParams.get("projectId"), "Project")) }); return; }
+      if (url.pathname === "/api/audit/status" && request.method === "GET") { send(response, 200, { job: product.auditStatus(string(url.searchParams.get("projectId"), "Project")) }); return; }
+      if (url.pathname === "/api/audit/preflight" && request.method === "GET") {
+        send(response, 200, await product.auditPreflight(string(url.searchParams.get("projectId"), "Project"), oneOf(url.searchParams.get("mode"), AUDIT_MODES, "Mode"), auditOptions((name) => url.searchParams.get(name)))); return;
+      }
+      // Starting an audit is a guarded JSON POST like every other change; a semantic mode also needs the explicit acknowledgement.
+      if (url.pathname === "/api/audit/start" && request.method === "POST") {
+        const payload = await body(request);
+        const budget = isRecord(payload["budget"]) ? payload["budget"] : {};
+        send(response, 200, product.startAudit(string(payload["projectId"], "Project"), {
+          mode: oneOf(payload["mode"], AUDIT_MODES, "Mode"),
+          acknowledgedModelCalls: payload["acknowledgedModelCalls"] === true,
+          ...auditOptions((name) => (BUDGET_FIELDS as readonly string[]).includes(name) ? budget[name] : payload[name]),
+        })); return;
+      }
+      if (url.pathname === "/api/architecture" && request.method === "GET") { send(response, 200, product.architecture(string(url.searchParams.get("projectId"), "Project"))); return; }
+      if (url.pathname === "/api/audit/runs" && request.method === "GET") { send(response, 200, await product.auditRuns(string(url.searchParams.get("projectId"), "Project"))); return; }
+      if (url.pathname === "/api/findings" && request.method === "GET") {
+        send(response, 200, await product.findings(string(url.searchParams.get("projectId"), "Project"), findingFilter(url.searchParams))); return;
+      }
+      if (url.pathname === "/api/findings/detail" && request.method === "GET") {
+        send(response, 200, await product.finding(string(url.searchParams.get("projectId"), "Project"), string(url.searchParams.get("id"), "Finding"))); return;
+      }
+      if (url.pathname === "/api/findings/classify" && request.method === "POST") {
+        const payload = await body(request);
+        send(response, 200, await product.classifyFinding(string(payload["projectId"], "Project"), string(payload["id"], "Finding"), oneOf(payload["classification"], FINDING_DISPOSITIONS, "Classification"), optionalString(payload["note"], "Note"))); return;
+      }
+      if (url.pathname === "/api/issues" && request.method === "GET") {
+        const statuses = listOf(url.searchParams.get("status"), PROPOSAL_STATUSES, "Status");
+        const findingId = url.searchParams.get("findingId");
+        send(response, 200, await product.issueProposals(string(url.searchParams.get("projectId"), "Project"), { ...(statuses === undefined ? {} : { statuses }), ...(findingId === null ? {} : { findingId }) })); return;
+      }
+      if (url.pathname === "/api/issues/detail" && request.method === "GET") {
+        send(response, 200, await product.issueProposal(string(url.searchParams.get("projectId"), "Project"), string(url.searchParams.get("id"), "Proposal"))); return;
+      }
+      if (url.pathname.startsWith("/api/issues/") && request.method === "POST") {
+        const payload = await body(request);
+        const project = string(payload["projectId"], "Project");
+        switch (url.pathname.slice("/api/issues/".length)) {
+          case "propose": send(response, 200, await product.proposeIssue(project, string(payload["findingId"], "Finding"), optionalString(payload["reason"], "Reason"))); return;
+          case "edit": send(response, 200, await product.editIssueProposal(project, string(payload["id"], "Proposal"), proposalEdit(payload))); return;
+          case "submit": send(response, 200, await product.submitIssueProposal(project, string(payload["id"], "Proposal"))); return;
+          // The revision is required and is never defaulted to the current one: approving means approving what was read.
+          case "approve": send(response, 200, await product.approveIssueProposal(project, string(payload["id"], "Proposal"), string(payload["revision"], "Revision"))); return;
+          case "reject": send(response, 200, await product.rejectIssueProposal(project, string(payload["id"], "Proposal"), string(payload["reason"], "Reason"))); return;
+          case "ready": send(response, 200, await product.markIssueProposalReady(project, string(payload["id"], "Proposal"))); return;
+          case "refresh": send(response, 200, await product.refreshIssueProposal(project, string(payload["id"], "Proposal"))); return;
+          default: throw new ProductServiceError("unknown_action", "This issue proposal action does not exist.", "Use propose, edit, submit, approve, reject, ready or refresh.");
+        }
       }
       if (url.pathname === "/api/acceptance" && request.method === "GET") {
         send(response, 200, await product.acceptance(string(url.searchParams.get("projectId"), "Project"))); return;

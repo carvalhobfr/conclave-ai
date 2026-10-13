@@ -1,6 +1,7 @@
 import type { InterfaceLanguage } from "./config/user-preferences.js";
 import type { PullRequestSummary } from "./domain/pr-summary.js";
 import type { ValidationReport } from "./domain/validation.js";
+import { coverageWarnings, formatReasonCounts, hiddenSourceFiles } from "./validation/coverage.js";
 
 const MAX_FINDINGS = 3;
 
@@ -25,6 +26,10 @@ const COPY = {
     unverified: (count: number) => `${String(count)} ${count === 1 ? "item still needs" : "items still need"} verification`,
     commands: "Agent prompt: conclave handoff .  ·  Details: --verbose  ·  Browser: conclave open .",
     nothing: "Nothing to review: Git found no changed files in this comparison.\nMake a change, pick a base with --base <ref>, or compare branches with `conclave compare .`.",
+    notAnalyzed: (count: number, reasons: string) =>
+      `Coverage: ${String(count)} changed ${count === 1 ? "file was" : "files were"} not analyzed (${reasons}). No result applies to ${count === 1 ? "it" : "them"}.`,
+    hiddenSource: (count: string) =>
+      `Coverage: ${count} source file(s) elsewhere in the repository are excluded for safety; impact through them is not visible. List: conclave scan .`,
   },
   "pt-BR": {
     changed: (files: number, affected: number) =>
@@ -36,6 +41,10 @@ const COPY = {
     unverified: (count: number) => `${String(count)} ${count === 1 ? "item ainda precisa" : "itens ainda precisam"} de verificação`,
     commands: "Prompt para o agente: conclave handoff .  ·  Detalhes: --verbose  ·  Navegador: conclave open .",
     nothing: "Nada para revisar: o Git não encontrou arquivos alterados nesta comparação.\nFaça uma mudança, escolha uma base com --base <ref> ou compare branches com `conclave compare .`.",
+    notAnalyzed: (count: number, reasons: string) =>
+      `Cobertura: ${String(count)} ${count === 1 ? "arquivo alterado não foi analisado" : "arquivos alterados não foram analisados"} (${reasons}). Nenhum resultado se aplica a ${count === 1 ? "ele" : "eles"}.`,
+    hiddenSource: (count: string) =>
+      `Cobertura: ${count} arquivo(s) de código em outras partes do repositório estão excluídos por segurança; o impacto através deles não é visível. Lista: conclave scan .`,
   },
   "es-ES": {
     changed: (files: number, affected: number) =>
@@ -47,6 +56,10 @@ const COPY = {
     unverified: (count: number) => `${String(count)} ${count === 1 ? "elemento aún necesita" : "elementos aún necesitan"} verificación`,
     commands: "Prompt para el agente: conclave handoff .  ·  Detalles: --verbose  ·  Navegador: conclave open .",
     nothing: "Nada que revisar: Git no encontró archivos cambiados en esta comparación.\nHaz un cambio, elige una base con --base <ref> o compara ramas con `conclave compare .`.",
+    notAnalyzed: (count: number, reasons: string) =>
+      `Cobertura: ${String(count)} ${count === 1 ? "archivo cambiado no fue analizado" : "archivos cambiados no fueron analizados"} (${reasons}). Ningún resultado se aplica a ${count === 1 ? "él" : "ellos"}.`,
+    hiddenSource: (count: string) =>
+      `Cobertura: ${count} archivo(s) de código en otras partes del repositorio están excluidos por seguridad; el impacto a través de ellos no es visible. Lista: conclave scan .`,
   },
 } as const;
 
@@ -113,6 +126,23 @@ export function renderCompactReview(
       lines.push(paint(color, ANSI.dim, `    → ${finding.remediation}`));
     }
     if (findings.length > shown.length) lines.push(paint(color, ANSI.dim, `  ${copy.more(findings.length - shown.length)}`));
+  }
+  // Only three findings are listed above, so an analysis gap gets its own line: a reader must
+  // never take the verdict as covering a file that no rule looked at.
+  const coverage = report.coverage;
+  if (coverage !== undefined) {
+    const warnings = coverageWarnings(coverage);
+    const unanalyzed = warnings.reduce((total, warning) => total + warning.count, 0);
+    if (unanalyzed > 0) {
+      const reasons = Object.assign({}, ...warnings.map((warning) => warning.reasons)) as (typeof warnings)[number]["reasons"];
+      lines.push("");
+      lines.push(paint(color, ANSI.yellow, copy.notAnalyzed(unanalyzed, formatReasonCounts(reasons))));
+    }
+    const hidden = hiddenSourceFiles(coverage);
+    if (hidden.count > 0) {
+      if (unanalyzed === 0) lines.push("");
+      lines.push(paint(color, ANSI.dim, copy.hiddenSource(`${String(hidden.count)}${hidden.truncated ? "+" : ""}`)));
+    }
   }
   lines.push("");
   lines.push(`${paint(color, ANSI.bold, copy.next)}: ${summary.nextSteps[0] ?? ""}`);

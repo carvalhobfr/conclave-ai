@@ -3,6 +3,7 @@ import type { ChangeSet, ValidationChangedFile } from "../domain/validation.js";
 import type { CodeRetrievalService } from "../retrieval/code-retrieval-service.js";
 import { createChallengePlan } from "../validation/challenge-router.js";
 import { GitChangeSetService } from "../validation/git-change-set.js";
+import { ModelContextLedger, type ModelContextProtection } from "../security/model-context.js";
 import { inspectRepository } from "../workflow/repository-inspector.js";
 
 const MAX_CHANGED_PATHS = 12;
@@ -15,7 +16,11 @@ const MAX_HUNK_BYTES = 6_000;
  * because a path and a symbol name cannot show that a literal, a condition, or a cleanup call
  * is wrong; only the changed text can.
  */
-function hunksByPath(patch: string, paths: readonly string[]): readonly ReasoningChangeHunk[] {
+function hunksByPath(patch: string, paths: readonly string[]): { readonly hunks: readonly ReasoningChangeHunk[]; readonly protection: ModelContextProtection } {
+  // Added, context and removed lines are all scanned: a credential deleted by this change is
+  // still in the diff. Scanning precedes truncation, which could otherwise cut a secret into
+  // a shape no detector recognizes.
+  const ledger = new ModelContextLedger();
   const wanted = new Set(paths);
   const sections = new Map<string, string[]>();
   let current: string | undefined;
@@ -37,13 +42,13 @@ function hunksByPath(patch: string, paths: readonly string[]): readonly Reasonin
   for (const path of paths) {
     const lines = sections.get(path);
     if (lines === undefined || lines.length === 0) continue;
-    const text = lines.join("\n");
+    const text = ledger.protect(path, lines.join("\n"));
     if (budget <= 0) break;
     const bounded = Buffer.byteLength(text, "utf8") > budget ? text.slice(0, budget) : text;
     budget -= Buffer.byteLength(bounded, "utf8");
     result.push({ path, patch: bounded });
   }
-  return result;
+  return { hunks: result, protection: ledger.summary() };
 }
 
 function changedLines(file: ValidationChangedFile): number {
@@ -99,7 +104,8 @@ function buildContext(
   const relatedSymbols = [...new Set([...memberCalls, ...graphSymbols])]
     .filter((symbol) => !symbols.includes(symbol) && retrieval.findSymbol(symbol).length > 0)
     .slice(0, MAX_RELATED_SYMBOLS);
-  return { source, paths, symbols, relatedSymbols, hunks: hunksByPath(changeSet.patch, paths),
+  const { hunks, protection } = hunksByPath(changeSet.patch, paths);
+  return { source, paths, symbols, relatedSymbols, hunks, protection,
     reviewDimensions: createChallengePlan(
       changeSet,
       { objective: "", claims: [], allowedPathPrefixes: [] },

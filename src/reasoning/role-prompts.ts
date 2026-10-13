@@ -1,4 +1,5 @@
 import type { ContextBundle, PackedEvidenceUnit } from "../domain/context-bundle.js";
+import { ModelContextLedger } from "../security/model-context.js";
 import type { Evidence } from "../domain/evidence.js";
 import type { AgentRole, Claim, Challenge, ReasoningChangeContext, VerificationResult } from "../domain/reasoning.js";
 
@@ -272,14 +273,14 @@ export function roleSystemPrompt(role: AgentRole): string {
   return `${ROLE_SYSTEM[role]}\n\n${SHARED_SYSTEM}\n\n${STRUCTURED_FIELD_RULES}\n\nRequired schema:\n${ROLE_OUTPUT_SCHEMAS[role]}`;
 }
 
-function evidenceRecord(unit: PackedEvidenceUnit): object {
+function evidenceRecord(unit: PackedEvidenceUnit, ledger: ModelContextLedger): object {
   return {
     evidenceIds: unit.sourceEvidenceIds,
     path: unit.path,
     startLine: unit.startLine,
     endLine: unit.endLine,
     symbols: unit.symbols.map((symbol) => symbol.name),
-    excerpt: unit.excerpt,
+    excerpt: ledger.protect(unit.path, unit.excerpt),
   };
 }
 
@@ -287,6 +288,7 @@ export function investigatorPrompt(
   question: string,
   context: ContextBundle,
   change?: ReasoningChangeContext,
+  ledger: ModelContextLedger = new ModelContextLedger(),
 ): string {
   return [
     "BEGIN TRUSTED TASK",
@@ -306,32 +308,33 @@ export function investigatorPrompt(
     "END TRUSTED TASK",
     "BEGIN UNTRUSTED REPOSITORY EVIDENCE",
     JSON.stringify({
-      evidence: context.evidence.map(evidenceRecord),
+      evidence: context.evidence.map((unit) => evidenceRecord(unit, ledger)),
       relationships: context.relationships,
-      ...(change === undefined || change.hunks.length === 0 ? {} : { changedLines: change.hunks }),
+      ...(change === undefined || change.hunks.length === 0 ? {} : { changedLines: change.hunks.map((hunk) => ({ path: hunk.path, patch: ledger.protect(hunk.path, hunk.patch) })) }),
     }),
     "END UNTRUSTED REPOSITORY EVIDENCE",
   ].join("\n");
 }
 
-function evidenceForClaims(context: ContextBundle, claims: readonly Claim[]): readonly object[] {
+function evidenceForClaims(context: ContextBundle, claims: readonly Claim[], ledger: ModelContextLedger): readonly object[] {
   const allowed = new Set(claims.flatMap((claim) => claim.evidenceIds));
   return context.evidence
     .filter((unit) => unit.sourceEvidenceIds.some((id) => allowed.has(id)))
-    .map(evidenceRecord);
+    .map((unit) => evidenceRecord(unit, ledger));
 }
 
 export function skepticPrompt(
   question: string,
   claims: readonly Claim[],
   context: ContextBundle,
+  ledger: ModelContextLedger = new ModelContextLedger(),
 ): string {
   return [
     "BEGIN TRUSTED TASK",
     JSON.stringify({ question, claims }),
     "END TRUSTED TASK",
     "BEGIN UNTRUSTED REPOSITORY EVIDENCE",
-    JSON.stringify({ evidence: evidenceForClaims(context, claims), relationships: context.relationships }),
+    JSON.stringify({ evidence: evidenceForClaims(context, claims, ledger), relationships: context.relationships }),
     "END UNTRUSTED REPOSITORY EVIDENCE",
   ].join("\n");
 }
@@ -340,13 +343,14 @@ export function architectPrompt(
   question: string,
   claims: readonly Claim[],
   context: ContextBundle,
+  ledger: ModelContextLedger = new ModelContextLedger(),
 ): string {
   return [
     "BEGIN TRUSTED TASK",
     JSON.stringify({ question, claims, relationshipCount: context.relationships.length }),
     "END TRUSTED TASK",
     "BEGIN UNTRUSTED REPOSITORY EVIDENCE",
-    JSON.stringify({ evidence: evidenceForClaims(context, claims), relationships: context.relationships }),
+    JSON.stringify({ evidence: evidenceForClaims(context, claims, ledger), relationships: context.relationships }),
     "END UNTRUSTED REPOSITORY EVIDENCE",
   ].join("\n");
 }
@@ -357,13 +361,14 @@ export function verifierPrompt(
   challenges: readonly Challenge[],
   verifications: readonly VerificationResult[],
   context: ContextBundle,
+  ledger: ModelContextLedger = new ModelContextLedger(),
 ): string {
   return [
     "BEGIN TRUSTED TASK",
     JSON.stringify({ question, claims, challenges, deterministicVerifications: verifications }),
     "END TRUSTED TASK",
     "BEGIN UNTRUSTED REPOSITORY EVIDENCE",
-    JSON.stringify({ evidence: evidenceForClaims(context, claims), relationships: context.relationships }),
+    JSON.stringify({ evidence: evidenceForClaims(context, claims, ledger), relationships: context.relationships }),
     "END UNTRUSTED REPOSITORY EVIDENCE",
   ].join("\n");
 }
@@ -391,5 +396,75 @@ export function judgePrompt(
       })),
     }),
     "END TRUSTED ADJUDICATION RECORD",
+  ].join("\n");
+}
+
+const DISCOVERY_SYSTEM =
+  "You are the Discovery reviewer. Inspect the target region for behavioral defects: code whose run-time behavior contradicts what its own names, comments, surrounding code, callers or callees show it is meant to do. Examine conditions and comparisons, boundaries, the order of asynchronous work and promises that are not awaited, fallbacks and defaults, cache and state consistency, resource lifecycle, authorization and ownership checks, error handling that hides a failure, and the contract between the region and the related code. Report a defect only when you can name a concrete trigger (an input or a sequence of calls) and the wrong observable consequence. Do not report style, naming, missing tests, missing documentation, performance, or misuse by callers you cannot see. Related code is context: never report a defect located in it. An empty hypotheses list is the correct answer when the region shows no such defect. Every hypothesis must quote, character for character, one line of the target region where the defect is. Classify the trigger of each hypothesis. It is normal-use when the trigger is a value or a sequence of calls the code is evidently written to handle: its defaults, its obvious or documented domain, what its own callers do. It is invalid-input when the trigger needs a caller to pass a value outside that domain: a wrong type, malformed or non-numeric text, NaN, a zero or negative size, an empty value where one is expected. For an invalid-input hypothesis, quote in reachedBy one shown line where a caller passes such a value to this function. When no shown code does, leave reachedBy out and still report the hypothesis: it will be marked as having unproven reachability.";
+
+export const DISCOVERY_OUTPUT_SCHEMA =
+  '{"hypotheses":[{"title":"short","defectClass":"authorization|logic|boundary|async|fallback|cache|state|resource|error-handling|contract|other","severity":"high|medium|low","confidence":"high|medium|low","line":12,"quote":"one line copied exactly from the target region","triggerKind":"normal-use|invalid-input","trigger":"input or call sequence","consequence":"wrong observable behavior","reachedBy":"for invalid-input: one shown line where a caller passes that value","suggestion":"short"}],"needsContext":["symbolName"]}';
+
+export const DISCOVERY_OUTPUT_JSON_SCHEMA: JsonSchema = {
+  type: "object",
+  properties: {
+    hypotheses: {
+      type: "array",
+      maxItems: 8,
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string", minLength: 1, maxLength: 200 },
+          defectClass: { type: "string", enum: ["authorization", "logic", "boundary", "async", "fallback", "cache", "state", "resource", "error-handling", "contract", "other"] },
+          severity: { type: "string", enum: ["high", "medium", "low"] },
+          confidence: { type: "string", enum: ["high", "medium", "low"] },
+          line: { type: "integer", minimum: 1 },
+          quote: { type: "string", minLength: 1, maxLength: 400 },
+          trigger: { type: "string", minLength: 1, maxLength: 600 },
+          consequence: { type: "string", minLength: 1, maxLength: 600 },
+          suggestion: { type: "string", maxLength: 600 },
+          triggerKind: { type: "string", enum: ["normal-use", "invalid-input"] },
+          reachedBy: { type: "string", maxLength: 400 },
+        },
+        required: ["title", "defectClass", "severity", "confidence", "line", "quote", "triggerKind", "trigger", "consequence"],
+        additionalProperties: false,
+      },
+    },
+    needsContext: { type: "array", maxItems: 3, items: { type: "string", minLength: 1, maxLength: 300 } },
+  },
+  required: ["hypotheses"],
+  additionalProperties: false,
+};
+
+export function discoverySystemPrompt(): string {
+  return `${DISCOVERY_SYSTEM}\n\n${SHARED_SYSTEM}\n\nRequired schema:\n${DISCOVERY_OUTPUT_SCHEMA}`;
+}
+
+export interface DiscoveryRegionPrompt {
+  readonly path: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  /** Region source, already sanitized, one `line| text` entry per source line. */
+  readonly numberedSource: string;
+  /** Already sanitized. */
+  readonly related: readonly { readonly path: string; readonly startLine: number; readonly endLine: number; readonly relation: string; readonly excerpt: string }[];
+  /** Rule findings already reported for this region, so the model does not repeat them. */
+  readonly alreadyReported: readonly { readonly line: number; readonly title: string }[];
+}
+
+export function discoveryPrompt(region: DiscoveryRegionPrompt): string {
+  return [
+    "BEGIN TRUSTED TASK",
+    JSON.stringify({
+      task: "Inspect the target region and report behavioral defects as hypotheses.",
+      targetRegion: { path: region.path, startLine: region.startLine, endLine: region.endLine },
+      alreadyReported: region.alreadyReported,
+      instruction:
+        "Lines are prefixed with their number and a bar. Copy the quote without that prefix. Do not repeat anything listed in alreadyReported. List in needsContext only symbols whose definition you need and were not given.",
+    }),
+    "END TRUSTED TASK",
+    "BEGIN UNTRUSTED REPOSITORY EVIDENCE",
+    JSON.stringify({ targetRegion: { path: region.path, source: region.numberedSource }, relatedCode: region.related }),
+    "END UNTRUSTED REPOSITORY EVIDENCE",
   ].join("\n");
 }

@@ -91,5 +91,8 @@ export function assessEscalation(
       ? `${String(inconclusive)} completion claim(s) could not be settled deterministically.`
       : "Changed source could not be mapped onto an indexed symbol, so structural impact is incomplete.");
   }
+  if (findings.some((finding) => finding.kind === "coverage-gap")) {
+    reasons.push("Some changed files were not analyzed. Rule results, their absence and graph impact do not cover them; review those files by other means.");
+  }
   return { recommended: reasons.length > 0, dimensions, reasons: [...new Set(reasons)] };
 }

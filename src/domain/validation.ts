@@ -1,4 +1,4 @@
-import type { GraphRelation } from "./code-index.js";
+import type { CoverageGapReason, GraphRelation } from "./code-index.js";
 
 export type ChangeSource =
   | { readonly kind: "working" }
@@ -109,7 +109,8 @@ export type ValidationFindingKind =
   | "receipt-failed"
   | "unreleased-resource"
   | "discarded-error"
-  | "inconsistent-key";
+  | "inconsistent-key"
+  | "coverage-gap";
 
 export interface ValidationEvidence {
   readonly path: string;
@@ -321,6 +322,45 @@ export interface ValidationEscalation {
   readonly reasons: readonly string[];
 }
 
+/** `not-indexed`: absent from the index for a reason the index did not record. */
+export type ValidationCoverageReason = CoverageGapReason | "not-indexed";
+
+/** A file that exists in the reviewed tree but was not analyzed. Never carries file content. */
+export interface ValidationCoverageGap {
+  readonly path: string;
+  readonly reason: ValidationCoverageReason;
+  /** Detector categories for a content exclusion, e.g. `credential`. */
+  readonly detail?: string;
+}
+
+/**
+ * What the review did not look at. Findings, and the absence of findings, apply only to
+ * analyzed files; a gap is an analysis limit, never a statement about the file's contents.
+ */
+export interface ValidationCoverage {
+  readonly changedFiles: {
+    readonly total: number;
+    readonly analyzed: number;
+    /** Removed by this change, so nothing remains to analyze. */
+    readonly deleted: number;
+    readonly notAnalyzed: number;
+  };
+  /** One entry per changed file that still exists and is absent from the analysis index. */
+  readonly gaps: readonly ValidationCoverageGap[];
+  /**
+   * Exclusions across the whole repository, which bound graph impact. Absent when the index
+   * did not record them; absence means unknown, not complete.
+   */
+  readonly repository?: {
+    readonly analyzedFiles: number;
+    /** Excluded entries per reason; an ignored directory counts once. */
+    readonly excluded: Readonly<Partial<Record<CoverageGapReason, number>>>;
+    /** Safety exclusions by path, capped; `safetyExcludedOmitted` counts the rest. */
+    readonly safetyExcluded: readonly ValidationCoverageGap[];
+    readonly safetyExcludedOmitted: number;
+  };
+}
+
 export interface ValidationReport {
   readonly criteria?: readonly CriterionResult[];
   readonly schemaVersion: 2 | 3 | 4 | 5;
@@ -343,4 +383,6 @@ export interface ValidationReport {
   readonly challengePlan: readonly ValidationChallenge[];
   /** Whether focused verification remains (tests, human review or optional reasoning). */
   readonly escalation: ValidationEscalation;
+  /** Absent in reports written before coverage was recorded; absence is not complete coverage. */
+  readonly coverage?: ValidationCoverage;
 }
