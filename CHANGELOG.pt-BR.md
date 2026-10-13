@@ -4,8 +4,11 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
-## [Unreleased]
+## [0.20.0] — 2026-10-13
 
+Inteligência de Repositório: auditorias do repositório inteiro, um registro de achados com triagem humana, propostas de issue locais e o cockpit de repositório. É a primeira versão no npm desde a 0.18.0; ela também traz as mudanças da 0.19.0 abaixo, que nunca foi publicada.
+
+- Correções da auditoria vindas da revisão: um arquivo excluído que apenas compartilha o radical com um import (`foo.test.ts` para `./foo`, `foo.json` para `./foo.js`) não esconde mais um import quebrado; uma auditoria Smart ou Deep compara o tamanho da região mostrada ao verificador com `--max-input-tokens` antes da chamada, em vez de assumir 2.000 tokens; e quando mais de 50 arquivos são retidos por segurança, os arquivos de código ficam entre os 50 listados, para que o aviso de código oculto não se perca.
 - Grafo entre arquivos: um import com extensão explícita `.js`, `.jsx`, `.mjs` ou `.cjs` agora resolve para o fonte TypeScript que o emite (`./store.js` → `store.ts`), como projetos no estilo NodeNext escrevem. Dois fontes que emitiriam o mesmo arquivo são ambíguos e não geram aresta, e um import nunca resolve para outra linguagem. Neste repositório, os imports relativos resolvidos passam de 5 para 579 de 585 e as arestas entre arquivos de 18 para 3.483.
 - Identidade de achados: dois achados do mesmo tipo no mesmo arquivo não compartilham mais `id` e `fingerprint`. Achados com uma única localização são ancorados no símbolo que os contém e na linha sinalizada; uma revisão que continua de um relatório antigo mantém a linhagem sem rebaseline.
 - Cobertura: os relatórios ganham a seção opcional `coverage`, e um arquivo alterado que foi excluído por segurança ou não pôde ser analisado pelo parser, e código alterado que esteja ausente do índice por outro motivo, geram um aviso `coverage-gap` em vez de passar em silêncio. `scan` e `index` listam os caminhos excluídos por segurança. O schema v5 declara o novo campo opcional; atualize uma cópia fixada do schema se você valida relatórios de forma estrita.

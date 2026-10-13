@@ -4,8 +4,11 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
-## [Unreleased]
+## [0.20.0] — 2026-10-13
 
+Repository Intelligence: whole-repository audits, a finding ledger with human triage, local issue proposals and the repository cockpit. This is the first npm release since 0.18.0; it also carries the 0.19.0 changes below, which were never published.
+
+- Audit fixes from review: an excluded file that merely shares a stem with an import (`foo.test.ts` for `./foo`, `foo.json` for `./foo.js`) no longer hides a broken import; a Smart or Deep audit checks the size of the region the verifier is shown against `--max-input-tokens` before the call instead of assuming 2,000 tokens; and when more than 50 files are withheld for safety, source files are kept in the listed 50 so the hidden-source warning is not lost.
 - Cross-file graph: an explicit `.js`, `.jsx`, `.mjs` or `.cjs` import specifier now resolves to the TypeScript source that emits it (`./store.js` → `store.ts`), as NodeNext-style projects write them. Two sources that would emit the same file are ambiguous and get no edge, and a specifier never resolves into another language. On this repository, resolved relative imports go from 5 to 579 of 585 and cross-file edges from 18 to 3,483.
 - Finding identity: two findings of one kind in one file no longer share an `id` and `fingerprint`. Single-location findings are anchored to their enclosing symbol and flagged line; a review that continues from an older report keeps its lineage without a rebaseline.
 - Coverage: reports gain an optional `coverage` section, and a changed file that was excluded for safety or could not be parsed, and changed source that is otherwise absent from the index, produces a `coverage-gap` warning instead of a silent pass. `scan` and `index` list safety-excluded paths. Schema v5 declares the new optional field; refresh a pinned copy of the schema if you validate reports strictly.
