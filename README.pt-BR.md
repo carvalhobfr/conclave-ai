@@ -13,6 +13,7 @@
 [![Node.js 20+](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Licença: MIT](https://img.shields.io/badge/license-MIT-4C1)](LICENSE)
 [![Changelog](https://img.shields.io/badge/changelog-histórico%20de%20versões-8B5CF6)](CHANGELOG.pt-BR.md)
+[![XERJ Corpus Hub: selected for review](https://img.shields.io/badge/XERJ-selected%20for%20review-6D28D9)](https://hub.xerj.org/contributors/carvalhobfr)
 
 [Início rápido](#início-rápido) · [CLI](docs/guides/cli.pt-BR.md) · [Cockpit](docs/guides/cockpit.pt-BR.md) · [Skill de agente](docs/guides/agent-skill.pt-BR.md) · [GitHub Actions](docs/guides/github-actions.pt-BR.md) · [FAQ](#perguntas-frequentes)
 
