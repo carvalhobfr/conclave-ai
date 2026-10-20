@@ -13,7 +13,7 @@
 [![Node.js 20+](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-4C1)](LICENSE)
 [![Changelog](https://img.shields.io/badge/changelog-release%20history-8B5CF6)](CHANGELOG.md)
-[![XERJ Corpus Hub: selected for review](https://img.shields.io/badge/XERJ-selected%20for%20review-6D28D9)](https://hub.xerj.org/contributors/carvalhobfr)
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/carvalhobfr/badge.svg)](https://hub.xerj.org/contributors/carvalhobfr)
 
 [Quick start](#quick-start) · [CLI](docs/guides/cli.md) · [Cockpit](docs/guides/cockpit.md) · [Agent skill](docs/guides/agent-skill.md) · [GitHub Actions](docs/guides/github-actions.md) · [FAQ](#faq)
 
