@@ -15,12 +15,17 @@ const PROVIDER_IDS = new Set<ProviderId>([
   "gemini",
   "opencode-go",
   "opencode-zen",
+  "claude-cli",
+  "codex-cli",
   "ollama",
   "lm-studio",
   "openai-compatible",
 ]);
 
 const LOCAL_PROVIDERS = new Set<ProviderId>(["ollama", "lm-studio", "openai-compatible"]);
+
+/** Providers that run a local CLI signed in with a subscription; they take no API key or endpoint. */
+export const CLI_LOGIN_PROVIDERS = new Set<ProviderId>(["claude-cli", "codex-cli"]);
 
 export class ConfigurationError extends Error {
   public constructor(message: string) {
@@ -88,6 +93,10 @@ export function defaultBaseUrl(provider: Exclude<ProviderId, "fake">): string | 
       return "https://opencode.ai/zen/go/v1";
     case "opencode-zen":
       return "https://opencode.ai/zen/v1";
+    case "claude-cli":
+    case "codex-cli":
+      // Runs a local CLI with the user's subscription login; no network endpoint to configure.
+      return undefined;
   }
 }
 

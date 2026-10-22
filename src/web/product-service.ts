@@ -18,7 +18,8 @@ import { MultiLanguageCodeParser } from "../code-intelligence/multi-language-par
 import type { RepositoryCodeIndex } from "../domain/code-index.js";
 import { loadReasoningConfiguration } from "../config/reasoning-config.js";
 import { activeEnvironmentPath, updateConclaveEnvironment } from "../config/environment-file.js";
-import { describeRuntimeConfig, loadRuntimeConfig } from "../config/runtime-config.js";
+import { CLI_LOGIN_PROVIDERS, describeRuntimeConfig, loadRuntimeConfig } from "../config/runtime-config.js";
+import { cliLoginModels } from "../config/provider-profiles.js";
 import type { RuntimeConfig } from "../domain/execution-mode.js";
 import type { CredentialSource } from "../domain/storage.js";
 import type { Evidence } from "../domain/evidence.js";
@@ -632,8 +633,10 @@ export class ConclaveProductService {
     const model = input.model.trim();
     const baseUrl = input.baseUrl.trim();
     const apiKey = input.apiKey?.trim();
+    // Subscription CLIs keep their login outside Conclave: no endpoint and no key to save.
+    const cliLogin = CLI_LOGIN_PROVIDERS.has(input.provider);
     if (model === "") throw new ProductServiceError("invalid_runtime_configuration", "A model is required.", "Choose a model and try again.");
-    if (baseUrl === "") throw new ProductServiceError("invalid_runtime_configuration", "A provider endpoint is required.", "Choose a provider endpoint and try again.");
+    if (!cliLogin && baseUrl === "") throw new ProductServiceError("invalid_runtime_configuration", "A provider endpoint is required.", "Choose a provider endpoint and try again.");
     if (input.mode === "local" && input.reasoningPreset !== "local") {
       throw new ProductServiceError("invalid_runtime_configuration", "Local Mode requires the local reasoning preset.", "Select Local Mode again.");
     }
@@ -643,7 +646,7 @@ export class ConclaveProductService {
 
     const existingApiKey = this.#environment["CONCLAVE_API_KEY"]?.trim();
     const effectiveApiKey = apiKey === undefined || apiKey === "" ? existingApiKey : apiKey;
-    if (input.mode === "api" && effectiveApiKey === undefined) {
+    if (input.mode === "api" && !cliLogin && effectiveApiKey === undefined) {
       throw new ProductServiceError("credential_required", "An API key is required for this provider.", "Paste the provider key; it will not be returned to the browser.");
     }
 
@@ -651,7 +654,7 @@ export class ConclaveProductService {
       CONCLAVE_MODE: input.mode,
       CONCLAVE_PROVIDER: input.provider,
       CONCLAVE_MODEL: model,
-      CONCLAVE_BASE_URL: baseUrl,
+      CONCLAVE_BASE_URL: cliLogin ? "" : baseUrl,
       CONCLAVE_REASONING_PRESET: input.reasoningPreset,
     };
     for (const role of REASONING_ROLE_NAMES) {
@@ -660,7 +663,7 @@ export class ConclaveProductService {
     }
     // Always written so switching to a preset without a fallback clears the previous one.
     values["CONCLAVE_FALLBACK_MODEL"] = input.fallbackModel?.trim() ?? "";
-    if (input.mode === "api" && effectiveApiKey !== undefined) values["CONCLAVE_API_KEY"] = effectiveApiKey;
+    if (input.mode === "api" && !cliLogin && effectiveApiKey !== undefined) values["CONCLAVE_API_KEY"] = effectiveApiKey;
 
     const candidate = { ...this.#environment, ...values };
     let config: RuntimeConfig;
@@ -698,6 +701,10 @@ export class ConclaveProductService {
   }
 
   public async discoverModels(input: RuntimeModelDiscoveryRequest): Promise<RuntimeModelsView> {
+    if (CLI_LOGIN_PROVIDERS.has(input.provider)) {
+      // No provider endpoint to query: the CLI's own catalogue is not exposed, so offer the known models.
+      return { provider: input.provider, endpoint: "local CLI login", models: cliLoginModels(input.provider) };
+    }
     const baseUrl = input.baseUrl.trim();
     if (baseUrl === "") throw new ProductServiceError("invalid_runtime_configuration", "A provider endpoint is required.", "Choose a provider endpoint and try again.");
     const apiKey = input.apiKey?.trim();

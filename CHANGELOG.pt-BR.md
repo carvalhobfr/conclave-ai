@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [Unreleased]
+
+- O build mantém `dist/cli.js` executável, então um checkout ligado (`npm link`) continua rodando `conclave` depois de `npm run build`, em vez de falhar com "permission denied".
+
 ## [0.20.0] — 2026-10-13
 
 Inteligência de Repositório: auditorias do repositório inteiro, um registro de achados com triagem humana, propostas de issue locais e o cockpit de repositório. É a primeira versão no npm desde a 0.18.0; ela também traz as mudanças da 0.19.0 abaixo, que nunca foi publicada.

@@ -162,4 +162,47 @@ describe("ConclaveProductService", () => {
     });
     expect(JSON.stringify(result)).not.toContain("test-model-list-key");
   });
+
+  it("saves a subscription CLI runtime with no key or endpoint and lists its models locally", async () => {
+    const root = await mkdtemp(join(tmpdir(), "conclave-web-cli-"));
+    const environment: NodeJS.ProcessEnv = {
+      CONCLAVE_MODE: "local",
+      CONCLAVE_PROVIDER: "ollama",
+      CONCLAVE_MODEL: "qwen2.5-coder:3b",
+      CONCLAVE_BASE_URL: "http://127.0.0.1:11434/v1",
+      CONCLAVE_REASONING_PRESET: "local",
+    };
+    const diagnose = vi.fn((config: RuntimeConfig): Promise<ProviderDiagnostics> => Promise.resolve({
+      mode: config.mode,
+      provider: config.providerSelection.provider,
+      endpoint: config.providerSelection.baseUrl,
+      modelConfigured: true,
+      endpointReachable: true,
+      inferenceAvailable: true,
+      retrievalLocal: true as const,
+      externalCallsDisabled: false,
+      message: "Bounded provider inference succeeded.",
+    }));
+    try {
+      const product = new ConclaveProductService({ environment, environmentPath: join(root, ".env"), diagnose });
+      const models = await product.discoverModels({ mode: "api", provider: "codex-cli", baseUrl: "" });
+      expect(models).toMatchObject({ provider: "codex-cli", endpoint: "local CLI login" });
+      expect(models.models).toContain("gpt-6-astra");
+
+      const result = await product.configureRuntime({
+        mode: "api",
+        provider: "claude-cli",
+        model: "sonnet",
+        baseUrl: "",
+        reasoningPreset: "full",
+      });
+      expect(result).toMatchObject({ saved: true, credentialUpdated: false, runtime: { active: "api", provider: "claude-cli", model: "sonnet" } });
+      const contents = await readFile(join(root, ".env"), "utf8");
+      expect(contents).toContain('CONCLAVE_PROVIDER="claude-cli"');
+      expect(contents).not.toContain("CONCLAVE_API_KEY");
+      expect(diagnose).toHaveBeenCalledOnce();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

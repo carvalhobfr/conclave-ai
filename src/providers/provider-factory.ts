@@ -4,6 +4,8 @@ import type { CredentialSource } from "../domain/storage.js";
 import type { LlmProvider, ProviderId } from "../domain/provider.js";
 import { ConfigurationError, defaultBaseUrl } from "../config/runtime-config.js";
 import { AnthropicProvider } from "./anthropic-provider.js";
+import { ClaudeCliProvider } from "./claude-cli-provider.js";
+import { CodexCliProvider } from "./codex-cli-provider.js";
 import { OpenAiCompatibleProvider, type FetchLike } from "./openai-compatible-provider.js";
 import { SystemOneJudgeProvider } from "./systemone-judge-provider.js";
 
@@ -21,6 +23,13 @@ export function createProvider(
     throw new ConfigurationError(
       `${selection.provider} uses a provider-specific protocol; its adapter is not implemented in Phase 1`,
     );
+  }
+  // Subscription CLIs use their own login: no endpoint and no API key to resolve.
+  if (selection.provider === "claude-cli") {
+    return new ClaudeCliProvider({ command: credentials.get("CONCLAVE_CLAUDE_COMMAND") });
+  }
+  if (selection.provider === "codex-cli") {
+    return new CodexCliProvider({ command: credentials.get("CONCLAVE_CODEX_COMMAND") });
   }
   if (selection.baseUrl === undefined) {
     throw new ConfigurationError(`CONCLAVE_BASE_URL is required for provider ${selection.provider}`);

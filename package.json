@@ -1,6 +1,6 @@
 {
   "name": "conclave-ai",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "Graph-aware independent validator for code changes and agent claims",
   "keywords": [
     "ai",
@@ -63,7 +63,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build:core": "tsc -p tsconfig.build.json",
+    "build:core": "tsc -p tsconfig.build.json && node scripts/mark-executable.mjs",
     "build:web": "vite build",
     "build": "npm run build:core && npm run build:web",
     "clean": "node scripts/clean-dist.mjs",

@@ -124,7 +124,10 @@ function HistoryPanel({ records, onContinue }: { readonly records: readonly Revi
   return <section className="history-panel" aria-label="Review history"><header><h2>Review history</h2><p>Local to this repository. Nothing is uploaded.</p></header>{records.map((record) => <article key={record.id}><span className={`decision-badge ${record.verdict}`}>{record.verdict}</span><div><strong>{record.title}</strong><p>{record.objective}</p><small>{new Date(record.createdAt).toLocaleString()}</small></div>{record.report !== undefined && <button type="button" className="text-action" onClick={() => onContinue(record)} aria-label={`Continue review: ${record.objective}`}>Continue this review</button>}</article>)}</section>;
 }
 
-type ConfigurationProfileId = "ollama" | "lm-studio" | "opencode-go" | "opencode-zen" | "openrouter" | "custom";
+type ConfigurationProfileId = "ollama" | "lm-studio" | "opencode-go" | "opencode-zen" | "openrouter" | "claude-cli" | "codex-cli" | "custom";
+
+/** Subscription CLIs sign in outside Conclave, so these profiles have no endpoint or key field. */
+const CLI_LOGIN_PROFILE_IDS: readonly ConfigurationProfileId[] = ["claude-cli", "codex-cli"];
 
 interface ConfigurationProfile extends RuntimeConfigurationRequest {
   readonly id: ConfigurationProfileId;
@@ -140,6 +143,8 @@ const CONFIGURATION_PROFILES: readonly ConfigurationProfile[] = [
   { id: "opencode-go", label: "OpenCode Go", mode: "api", provider: "opencode-go", baseUrl: "https://opencode.ai/zen/go/v1", model: "deepseek-v4.1-flash", reasoningPreset: "full", models: ["deepseek-v4.1-flash", "deepseek-v4-pro", "qwen3.8-max", "space-bunny-free", "qwen3.8-flash", "mimo-v2.6-flash", "kimi-k2.7-code", "glm-5.3"] },
   { id: "opencode-zen", label: "OpenCode Zen", mode: "api", provider: "opencode-zen", baseUrl: "https://opencode.ai/zen/v1", model: "", reasoningPreset: "free-like", models: ["kimi-k2.7-code", "deepseek-v4-flash", "glm-5.2"] },
   { id: "openrouter", label: "OpenRouter", mode: "api", provider: "openrouter", baseUrl: "https://openrouter.ai/api/v1", model: "", reasoningPreset: "free-like", models: [] },
+  { id: "claude-cli", label: "Claude subscription · CLI", mode: "api", provider: "claude-cli", baseUrl: "", model: "sonnet", reasoningPreset: "full", models: ["sonnet", "opus", "haiku"] },
+  { id: "codex-cli", label: "ChatGPT subscription · Codex CLI", mode: "api", provider: "codex-cli", baseUrl: "", model: "gpt-6-astra", reasoningPreset: "full", models: ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] },
   { id: "custom", label: "Custom OpenAI-compatible", mode: "api", provider: "openai-compatible", baseUrl: "https://provider.example/v1", model: "", reasoningPreset: "free-like", models: [] },
 ];
 
@@ -275,6 +280,8 @@ function ConfigurationPanel({ runtime, onRuntime, library, onSelectConclave, onD
   }, [library]);
   if (runtime === undefined) return <Empty title="Configuration unavailable" detail="The server runtime has not responded yet." />;
   const profile = CONFIGURATION_PROFILES.find((item) => item.id === profileId) ?? initial;
+  const usesCliLogin = CLI_LOGIN_PROFILE_IDS.includes(profile.id);
+  const runtimeUsesCliLogin = CONFIGURATION_PROFILES.some((item) => CLI_LOGIN_PROFILE_IDS.includes(item.id) && item.provider === runtime.provider);
   const chooseProfile = (id: ConfigurationProfileId) => {
     const next = CONFIGURATION_PROFILES.find((item) => item.id === id) ?? DEFAULT_CONFIGURATION_PROFILE;
     setProfileId(next.id);
@@ -341,19 +348,21 @@ function ConfigurationPanel({ runtime, onRuntime, library, onSelectConclave, onD
         : <input id="provider-model" list="provider-models" value={model} onChange={(event) => chooseModel(event.target.value)} placeholder="Load models or enter an ID" autoComplete="off" />}
         <button type="button" onClick={() => void discoverModels()} disabled={loadingModels}>{loadingModels ? "Loading…" : "Load available models"}</button></div>
       <datalist id="provider-models">{profile.models.map((item) => <option value={item} key={item} />)}</datalist>
-      <label htmlFor="provider-endpoint">Endpoint</label>
-      <input id="provider-endpoint" type="url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} autoComplete="off" />
+      {usesCliLogin
+        ? <p className="muted configuration-cli-note">Uses the <code>{profile.id === "claude-cli" ? "claude" : "codex"}</code> CLI already signed in on this machine. {profile.id === "claude-cli" ? <>Run <code>claude</code> once and log in.</> : <>Run <code>codex login</code> and choose ChatGPT sign-in.</>} No key is stored by Conclave.</p>
+        : <><label htmlFor="provider-endpoint">Endpoint</label>
+      <input id="provider-endpoint" type="url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} autoComplete="off" /></>}
       <label htmlFor="reasoning-preset">Reasoning</label>
       <select id="reasoning-preset" value={reasoningPreset} onChange={(event) => setReasoningPreset(event.target.value as RuntimeConfigurationRequest["reasoningPreset"])} disabled={profile.mode === "local"}>
         {profile.mode === "local" ? <option value="local">Local bounded route</option> : <><option value="free-like">Fast · investigator + judge</option><option value="full">Full · all five roles</option></>}
       </select>
-      {profile.mode === "api" && <><label htmlFor="provider-api-key">API key</label><div className="secret-field"><input id="provider-api-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={runtime.credentialConfigured ? "Leave blank to keep current key" : "Paste provider key"} autoComplete="off" spellCheck={false} /><small>{runtime.credentialHint === undefined ? "The server never returns the complete value." : <>Current key: <code>{runtime.credentialHint}</code>. Only this masked hint is returned.</>}</small></div></>}
+      {profile.mode === "api" && !usesCliLogin && <><label htmlFor="provider-api-key">API key</label><div className="secret-field"><input id="provider-api-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={runtime.credentialConfigured ? "Leave blank to keep current key" : "Paste provider key"} autoComplete="off" spellCheck={false} /><small>{runtime.credentialHint === undefined ? "The server never returns the complete value." : <>Current key: <code>{runtime.credentialHint}</code>. Only this masked hint is returned.</>}</small></div></>}
       <button type="submit" className="run-button" disabled={saving}>{saving ? "Saving and testing…" : "Save and test"}</button>
     </form>
     <p className="configuration-security">The key is sent over this loopback connection and stored in your Conclave settings file with owner-only permissions. Runtime responses include only its masked first 2 and last 4 characters.</p>
     {error !== "" && <div className="configuration-result failed" role="alert"><strong>Not saved</strong><span>{error}</span></div>}
     {result !== undefined && <div className={`configuration-result ${result.diagnostic.inferenceAvailable ? "passed" : "failed"}`} role="status"><strong>{result.diagnostic.inferenceAvailable ? "Saved · inference test passed" : "Saved · inference test failed"}</strong><span>{result.diagnostic.message}</span><small>{result.diagnostic.provider} · {result.runtime.model} · {result.diagnostic.endpoint}</small></div>}
-    <dl><div><dt>Active mode</dt><dd>{runtime.active}</dd></div><div><dt>Provider</dt><dd>{runtime.provider ?? "not configured"}</dd></div><div><dt>Model</dt><dd>{runtime.model ?? "not configured"}</dd></div><div><dt>Credential</dt><dd>{runtime.active === "local" ? "not required" : runtime.credentialConfigured ? runtime.credentialHint ?? "configured" : "missing"}</dd></div></dl>
+    <dl><div><dt>Active mode</dt><dd>{runtime.active}</dd></div><div><dt>Provider</dt><dd>{runtime.provider ?? "not configured"}</dd></div><div><dt>Model</dt><dd>{runtime.model ?? "not configured"}</dd></div><div><dt>Credential</dt><dd>{runtime.active === "local" ? "not required" : runtimeUsesCliLogin ? "local CLI login" : runtime.credentialConfigured ? runtime.credentialHint ?? "configured" : "missing"}</dd></div></dl>
   </section>;
 }
 
