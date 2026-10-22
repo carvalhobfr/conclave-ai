@@ -4,8 +4,11 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
-## [Unreleased]
+## [0.21.0] — 2026-10-22
 
+Subscription providers: Ask and Investigate can run on the Claude or Codex plan you already pay for, without an API key.
+
+- New `claude-cli` and `codex-cli` providers run the locally installed `claude` and `codex` with your subscription login, so requests need no API key. Both are selectable in the cockpit and with `CONCLAVE_PROVIDER`. The prompt goes through stdin with a timeout, API keys are removed from their environment so the subscription is used, and they run in a temporary folder; Claude runs in print mode with tools off and no settings sources, Codex in exec mode with a read-only sandbox, ignoring the user config. `CONCLAVE_CLAUDE_COMMAND` and `CONCLAVE_CODEX_COMMAND` override the binary.
 - A build keeps `dist/cli.js` executable, so a linked checkout (`npm link`) still runs `conclave` after `npm run build` instead of failing with "permission denied".
 
 ## [0.20.0] — 2026-10-13

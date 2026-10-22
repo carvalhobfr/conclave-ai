@@ -4,8 +4,11 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
-## [Unreleased]
+## [0.21.0] — 2026-10-22
 
+Provedores por assinatura: Ask e Investigate podem usar o plano do Claude ou do Codex que você já paga, sem chave de API.
+
+- Novos provedores `claude-cli` e `codex-cli` rodam o `claude` e o `codex` instalados com o login da sua assinatura, então os pedidos não precisam de chave de API. Os dois podem ser escolhidos no cockpit e com `CONCLAVE_PROVIDER`. O prompt vai pelo stdin com limite de tempo, as chaves de API são removidas do ambiente deles para usar a assinatura, e eles rodam numa pasta temporária; o Claude roda em modo print com ferramentas desligadas e sem fontes de configuração, o Codex em modo exec com sandbox só de leitura, ignorando a configuração do usuário. `CONCLAVE_CLAUDE_COMMAND` e `CONCLAVE_CODEX_COMMAND` trocam o binário.
 - O build mantém `dist/cli.js` executável, então um checkout ligado (`npm link`) continua rodando `conclave` depois de `npm run build`, em vez de falhar com "permission denied".
 
 ## [0.20.0] — 2026-10-13
