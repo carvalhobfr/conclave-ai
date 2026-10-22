@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [Unreleased]
+
+- A build keeps `dist/cli.js` executable, so a linked checkout (`npm link`) still runs `conclave` after `npm run build` instead of failing with "permission denied".
+
 ## [0.20.0] — 2026-10-13
 
 Repository Intelligence: whole-repository audits, a finding ledger with human triage, local issue proposals and the repository cockpit. This is the first npm release since 0.18.0; it also carries the 0.19.0 changes below, which were never published.
