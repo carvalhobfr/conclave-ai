@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.25.0] — 2026-10-27
+
+- Plugin manifest: widgets are now only what needs Conclave's own analysis. `repository-health` becomes `review-status` (blocked and unreviewed repositories, and each one's last verdict), `recent-commits` is removed because the commit list is plain Git, and `last-commit-verdict` is new; `commit-verdicts` is unchanged. A host draws every widget itself and shows branch, uncommitted work and commits from Git, adding Conclave's verdict when `conclave` is installed. `status` and `commits` still carry the Git data. The manifest's `protocol` stays 1: no host reads it yet.
+
 ## [0.24.0] — 2026-10-27
 
 - New `conclave plugin manifest [--json]` and `conclave plugin schema <id>`: the contract a host app (a dashboard, launcher or app with widgets) reads to drive Conclave without knowing its CLI. The manifest lists the commands it may run without a shell and how to build their arguments, what each one writes, the schema of its output, and the widgets (`repository-health`, `recent-commits`, `commit-verdicts`) and actions (`check-repository`, `review-last-commit`, `show-agent-prompt`, `open-cockpit`) built on them; `schemas/plugin-manifest.v1.schema.json` describes it, and tests run the argv it prescribes through the real parser and every widget field against real output. Cockpit: new **Commits** tab with the latest commits and an opt-in deterministic review of each, backed by `GET /api/commits` (read-only, no model call).

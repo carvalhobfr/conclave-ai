@@ -174,6 +174,9 @@ describe.skipIf(!built)("conclave CLI end to end", () => {
     await writeFile(join(root, "src", "refund.ts"), "export const refund = 1;\n");
     await git(root, ["commit", "-am", "fix: simplify refunds"]);
 
+    // A saved review gives the review-status widget a verdict to show.
+    expect([0, 1, 2]).toContain((await runCli(["check", ".", "--json"], root)).code);
+
     const served = await runCli(["plugin", "manifest", "--json"], root);
     expect(served.stderr).toBe("");
     expect(served.code).toBe(0);

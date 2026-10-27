@@ -73,6 +73,16 @@ describe("plugin manifest", () => {
     }
   });
 
+  it("offers only widgets that need Conclave's own analysis", () => {
+    expect(manifest.widgets.map((widget) => widget.id)).toEqual(["review-status", "last-commit-verdict", "commit-verdicts"]);
+    // Branch, uncommitted work and the commit list are plain Git; a host reads those itself.
+    const needsConclave = /^(summary\.(blocked|needsReview|verdicts)|repositories\[\]\.lastReview|commits\[\]\.analysis)/u;
+    for (const widget of manifest.widgets) {
+      expect(widget.fields.some((field) => needsConclave.test(field.path)), `${widget.id} shows nothing Conclave-specific`).toBe(true);
+      if (widget.command === "commits") expect(widget.arguments["analyze"], `${widget.id} lists commits without reviewing them`).toBe(true);
+    }
+  });
+
   it("declares every effect a command has and keeps the cheap ones cheap", () => {
     expect(command("status").effects).toEqual([]);
     expect(command("commits").effects).toEqual([]);
@@ -149,7 +159,7 @@ describe("plugin manifest", () => {
     const text = renderPluginManifest(manifest);
     expect(text).toContain("Conclave 9.9.9");
     expect(text).toContain("check: Check changes [writes-conclave-state; cost high]");
-    expect(text).toContain("repository-health");
+    expect(text).toContain("review-status");
   });
 
   it("resolves manifest field paths", () => {

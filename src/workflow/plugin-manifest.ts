@@ -191,34 +191,41 @@ const COMMANDS: readonly PluginCommand[] = [
   },
 ];
 
+/**
+ * Only what needs Conclave's own analysis is offered as a widget. Branch, uncommitted work and the
+ * commit list are plain Git: a host that already reads Git draws those itself, and `status` and
+ * `commits` still carry them for hosts that would rather not. A host draws every widget; these
+ * entries name the command to run and the fields to show, not an interface.
+ */
 const WIDGETS: readonly PluginWidget[] = [
   {
-    id: "repository-health",
-    title: "Repository health",
-    description: "How many repositories have uncommitted work, a blocked review or no current review.",
+    id: "review-status",
+    title: "Review status",
+    description: "How many repositories have a blocked review or no current review, and the verdict of each one's last review.",
     command: "status",
     arguments: {},
     sizes: ["small", "medium"],
     refresh: { minIntervalSeconds: 60 },
     fields: [
-      { label: "Uncommitted", path: "summary.dirty" },
       { label: "Blocked", path: "summary.blocked" },
       { label: "Needs review", path: "summary.needsReview" },
+      { label: "Last verdict", path: "repositories[].lastReview.verdict" },
     ],
   },
   {
-    id: "recent-commits",
-    title: "Recent commits",
-    description: "The latest commits of a repository.",
+    id: "last-commit-verdict",
+    title: "Last commit verdict",
+    description: "The deterministic review of the latest commit: verdict and finding counts. Indexes the whole tree, so it refreshes slowly.",
     command: "commits",
-    arguments: { limit: 5 },
-    sizes: ["medium", "large"],
-    refresh: { minIntervalSeconds: 120 },
+    arguments: { limit: 1, analyze: true },
+    sizes: ["small", "medium"],
+    refresh: { minIntervalSeconds: 300 },
     fields: [
       { label: "Commit", path: "commits[].shortSha" },
       { label: "Subject", path: "commits[].subject" },
-      { label: "Author", path: "commits[].author" },
-      { label: "Date", path: "commits[].authoredAt" },
+      { label: "Verdict", path: "commits[].analysis.verdict" },
+      { label: "Blocking", path: "commits[].analysis.findings.blocking" },
+      { label: "Warnings", path: "commits[].analysis.findings.warning" },
     ],
   },
   {
