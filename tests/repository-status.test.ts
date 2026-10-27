@@ -130,7 +130,8 @@ describe("repositoryStatus", () => {
     await git(root, ["checkout", "-q", "main"]);
     await writeFile(join(root, "src", "refund.ts"), "export const main = 1;\n");
     await git(root, ["commit", "-qam", "main change"]);
-    await execFileAsync("git", ["merge", "side"], { cwd: root }).catch(() => undefined);
+    // The merge stops on the conflict, so git exits non-zero; the helper supplies the identity a newer Git insists on.
+    await git(root, ["merge", "side"]).catch(() => undefined);
 
     const merging = available((await repositoryStatus({ repositories: [root] })).repositories[0]);
     expect(merging.worktree.conflicted).toBe(1);

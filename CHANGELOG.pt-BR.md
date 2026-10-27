@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.23.1] — 2026-10-27
+
+- Correção de release: o 0.23.0 foi tagueado mas nunca publicado, porque a verificação de release falhou em um teste do `status` que dependia de identidade Git no runner. O 0.23.1 é o primeiro 0.23 publicado e traz tudo o que está listado no 0.23.0.
+
 ## [0.23.0] — 2026-10-27
 
 - Novo `conclave status [path...]`: um retrato compacto de um ou mais repositórios (até 50) para painéis e widgets: branch, adiantado/atrasado em relação ao upstream, arquivos preparados, alterados, novos e em conflito, HEAD e a última revisão salva com veredito e contagem de achados, sinalizada quando o HEAD andou desde então. Uma pasta que não é repositório é informada, não é fatal. O Git roda sem lock opcional e sem monitor de arquivos, então consultar nunca escreve no repositório; nenhum modelo é chamado. `--json` segue o novo `schemas/status.v1.schema.json`. Biblioteca: novo `status()`.

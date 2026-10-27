@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.23.1] — 2026-10-27
+
+- Release fix: 0.23.0 was tagged but never published, because its release verification failed on a `status` test that needed a Git identity on the runner. 0.23.1 is the first published 0.23 and carries everything listed under 0.23.0.
+
 ## [0.23.0] — 2026-10-27
 
 - New `conclave status [path...]`: a compact snapshot of one or more repositories (up to 50) for dashboards and widgets: branch, upstream ahead/behind, staged, changed, new and conflicted files, HEAD, and the last saved review with its verdict and finding counts, flagged when HEAD has moved since. A folder that is not a repository is reported, not fatal. Git runs with no optional lock and no file-system monitor, so polling never writes to the repository; no model is called. `--json` follows the new `schemas/status.v1.schema.json`. Library: new `status()`.
