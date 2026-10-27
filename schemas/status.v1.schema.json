@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://conclave.dev/schemas/status.v1.schema.json",
+  "title": "Conclave Repository Status v1",
+  "description": "Output of `conclave status --json`: a compact, poll-friendly snapshot of one or more repositories. Read-only; no model is called.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generatedAt", "summary", "repositories"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositories", "unavailable", "dirty", "blocked", "needsReview"],
+      "properties": {
+        "repositories": { "type": "integer", "minimum": 0 },
+        "unavailable": { "type": "integer", "minimum": 0 },
+        "dirty": { "type": "integer", "minimum": 0, "description": "Repositories with uncommitted work." },
+        "blocked": { "type": "integer", "minimum": 0, "description": "Repositories whose last review blocked and still matches HEAD." },
+        "needsReview": { "type": "integer", "minimum": 0, "description": "Repositories never reviewed, or whose HEAD moved since the last review." }
+      }
+    },
+    "repositories": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/available" },
+          { "$ref": "#/$defs/unavailable" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "available": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "ok", "root", "name", "branch", "head", "upstream", "worktree", "clean", "lastReview"],
+      "properties": {
+        "path": { "type": "string", "description": "The path as it was requested." },
+        "ok": { "const": true },
+        "root": { "type": "string" },
+        "name": { "type": "string" },
+        "branch": { "type": ["string", "null"], "description": "Null on a detached HEAD." },
+        "head": {
+          "type": ["object", "null"],
+          "description": "Null in a repository with no commits yet.",
+          "additionalProperties": false,
+          "required": ["sha", "shortSha", "subject", "authoredAt"],
+          "properties": {
+            "sha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+            "shortSha": { "type": "string" },
+            "subject": { "type": "string" },
+            "authoredAt": { "type": "string" }
+          }
+        },
+        "upstream": {
+          "type": ["object", "null"],
+          "description": "Null when the branch tracks nothing.",
+          "additionalProperties": false,
+          "required": ["ref", "ahead", "behind"],
+          "properties": {
+            "ref": { "type": "string" },
+            "ahead": { "type": "integer", "minimum": 0 },
+            "behind": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "worktree": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["staged", "unstaged", "untracked", "conflicted"],
+          "properties": {
+            "staged": { "type": "integer", "minimum": 0 },
+            "unstaged": { "type": "integer", "minimum": 0 },
+            "untracked": { "type": "integer", "minimum": 0 },
+            "conflicted": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "clean": { "type": "boolean" },
+        "lastReview": {
+          "type": ["object", "null"],
+          "description": "The most recent saved Conclave review, or null when there is none.",
+          "additionalProperties": false,
+          "required": ["reviewId", "createdAt", "verdict", "objective", "headSha", "headMatches", "findings"],
+          "properties": {
+            "reviewId": { "type": "string" },
+            "createdAt": { "type": "string" },
+            "verdict": { "enum": ["pass", "warn", "block", "inconclusive"] },
+            "objective": { "type": "string" },
+            "headSha": { "type": "string" },
+            "headMatches": {
+              "type": "boolean",
+              "description": "False once HEAD has moved since the review. Edits made after a review at the same HEAD are not detected."
+            },
+            "findings": {
+              "type": ["object", "null"],
+              "description": "Null for reviews saved without a full report.",
+              "additionalProperties": false,
+              "required": ["blocking", "warning", "info"],
+              "properties": {
+                "blocking": { "type": "integer", "minimum": 0 },
+                "warning": { "type": "integer", "minimum": 0 },
+                "info": { "type": "integer", "minimum": 0 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "unavailable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "ok", "error"],
+      "properties": {
+        "path": { "type": "string" },
+        "ok": { "const": false },
+        "error": { "type": "string" }
+      }
+    }
+  }
+}

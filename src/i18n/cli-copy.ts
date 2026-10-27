@@ -114,6 +114,18 @@ const COMMANDS: readonly CommandHelp[] = [
     examples: ["conclave commits .", "conclave commits . --base origin/main --analyze --json"],
   },
   {
+    id: "status",
+    usage: "conclave status [path...] [--json]",
+    group: "workflow",
+    description: localized("Show branch, uncommitted work and the last review of one or more repositories.", "Mostra branch, trabalho não commitado e a última revisão de um ou mais repositórios.", "Muestra rama, trabajo sin commitear y la última revisión de uno o más repositorios."),
+    details: localized(
+      "A compact snapshot meant to be polled by a dashboard or widget: branch, upstream ahead/behind, staged, changed, new and conflicted files, HEAD, and the last saved review with its verdict and finding counts, flagged when HEAD has moved since. Accepts up to 50 repositories; a folder that is not a repository is reported, not fatal. Read-only: Git runs with no optional lock and no file-system monitor, nothing is written and no model is called. The `--json` output follows schemas/status.v1.schema.json.",
+      "Um retrato compacto para ser consultado por painel ou widget: branch, adiantado/atrasado em relação ao upstream, arquivos preparados, alterados, novos e em conflito, HEAD e a última revisão salva com veredito e contagem de achados, sinalizada quando o HEAD andou desde então. Aceita até 50 repositórios; uma pasta que não é repositório é informada, não fatal. Somente leitura: o Git roda sem lock opcional e sem monitor de arquivos, nada é escrito e nenhum modelo é chamado. A saída `--json` segue schemas/status.v1.schema.json.",
+      "Una instantánea compacta pensada para que la consulte un panel o widget: rama, adelanto/retraso respecto al upstream, archivos preparados, cambiados, nuevos y en conflicto, HEAD y la última revisión guardada con su veredicto y recuento de hallazgos, marcada cuando HEAD se ha movido desde entonces. Acepta hasta 50 repositorios; una carpeta que no es repositorio se informa, no es fatal. Solo lectura: Git se ejecuta sin bloqueo opcional ni monitor de archivos, no se escribe nada y no se llama a ningún modelo. La salida `--json` sigue schemas/status.v1.schema.json.",
+    ),
+    examples: ["conclave status .", "conclave status ~/Dev/api ~/Dev/web --json"],
+  },
+  {
     id: "handoff",
     usage: "conclave handoff [path] [--json]",
     group: "workflow",

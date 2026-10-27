@@ -47,6 +47,15 @@ conclave commits . --limit 20 --analyze --json      # revisão determinística d
 
 `--analyze` revisa cada commit contra o primeiro pai, usando o assunto do commit como objetivo, e informa veredito, contagem de achados e os principais achados. Não chama modelo, não executa código do repositório e não altera o seu checkout. Cada commit é indexado por inteiro, então o limite é 25 commits. O JSON segue [`schemas/commit-timeline.v1.schema.json`](../../schemas/commit-timeline.v1.schema.json).
 
+### Status para painéis e widgets
+
+```bash
+conclave status .                          # branch, upstream, trabalho não commitado, última revisão
+conclave status ~/Dev/api ~/Dev/web --json # até 50 repositórios numa chamada
+```
+
+Um retrato compacto, feito para ser consultado várias vezes: branch, adiantado/atrasado em relação ao upstream, arquivos preparados, alterados, novos e em conflito, HEAD e a última revisão salva com veredito e contagem de achados. `lastReview.headMatches` vira falso quando o HEAD anda depois de uma revisão. Uma pasta que não é repositório é informada, não é fatal. O Git roda sem lock opcional e sem monitor de arquivos, então consultar nunca escreve no repositório, e nenhum modelo é chamado. O JSON segue [`schemas/status.v1.schema.json`](../../schemas/status.v1.schema.json).
+
 ### O que o `check` faz por você
 
 - encontra o repositório e a provável base do pull request;

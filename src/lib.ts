@@ -26,9 +26,11 @@ import { GitChangeSetService } from "./validation/git-change-set.js";
 import { SuperValidator } from "./validation/super-validator.js";
 import { commitTimeline, type CommitTimeline, type CommitTimelineOptions } from "./workflow/commit-timeline.js";
 import { inferredReviewObjective, inspectRepository } from "./workflow/repository-inspector.js";
+import { repositoryStatus, type RepositoryStatusOptions, type RepositoryStatusSnapshot } from "./workflow/repository-status.js";
 
 export type { PullRequestSummary, ReviewHandoff, ValidationReport, ChangeSource, ReasoningResult };
 export type { AuditFinding, AuditReport } from "./domain/audit.js";
+export type { RepositoryStatusEntry, RepositoryStatusOptions, RepositoryStatusSnapshot } from "./workflow/repository-status.js";
 export type { CommitAnalysis, CommitTimeline, CommitTimelineOptions, TimelineCommit } from "./workflow/commit-timeline.js";
 
 export interface CheckOptions {
@@ -88,6 +90,14 @@ export async function audit(options: { readonly repository?: string; readonly wr
  */
 export function commits(options: CommitTimelineOptions = {}): Promise<CommitTimeline> {
   return commitTimeline(options);
+}
+
+/**
+ * Branch, tracking, uncommitted work and the last saved review of one or more repositories, cheap
+ * enough to poll. Read-only; a folder that is not a repository is reported, not thrown.
+ */
+export function status(options: RepositoryStatusOptions = {}): Promise<RepositoryStatusSnapshot> {
+  return repositoryStatus(options);
 }
 
 /** Correction request for a coding agent, derived from a report. */

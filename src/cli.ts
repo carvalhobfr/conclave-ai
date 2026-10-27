@@ -99,6 +99,7 @@ import { createReviewHandoff } from "./domain/review-handoff.js";
 import { listReviewHistory, saveReviewHistory, type ReviewHistoryRecord } from "./storage/review-history.js";
 import { inferredReviewObjective, inspectRepository } from "./workflow/repository-inspector.js";
 import { commitTimeline, renderCommitTimeline } from "./workflow/commit-timeline.js";
+import { renderRepositoryStatus, repositoryStatus } from "./workflow/repository-status.js";
 import {
   cliHelp,
   guidedChoices,
@@ -1366,6 +1367,13 @@ async function commitsCommand(args: readonly string[]): Promise<void> {
   else console.log(renderCommitTimeline(timeline));
 }
 
+async function statusCommand(args: readonly string[]): Promise<void> {
+  const parsed = parseArguments(args);
+  const snapshot = await repositoryStatus({ repositories: parsed.positionals });
+  if (parsed.json) print(snapshot, true);
+  else console.log(renderRepositoryStatus(snapshot));
+}
+
 async function showLatestHandoff(args: readonly string[]): Promise<void> {
   const parsed = parseArguments(args);
   const repositoryRoot = resolve(parsed.positionals[0] ?? ".");
@@ -2041,7 +2049,7 @@ async function runDemo(): Promise<void> {
 }
 
 const KNOWN_COMMANDS = [
-  "check", "compare", "open", "review", "validate", "pr", "history", "commits", "handoff", "doctor", "setup", "update", "start",
+  "check", "compare", "open", "review", "validate", "pr", "history", "commits", "status", "handoff", "doctor", "setup", "update", "start",
   "scan", "index", "search", "retrieve", "symbol", "text", "graph", "path", "ask", "investigate", "smoke", "collect",
   "audit", "findings", "issues",
   "criteria", "eval", "eval-graph", "eval-reasoning", "config", "models", "init", "skill", "provider-check", "mcp", "demo", "tools", "help",
@@ -2174,6 +2182,9 @@ async function main(): Promise<void> {
       return;
     case "commits":
       await commitsCommand(args);
+      return;
+    case "status":
+      await statusCommand(args);
       return;
     case "doctor":
       await doctorRepository(args);

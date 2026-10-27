@@ -47,6 +47,15 @@ conclave commits . --limit 20 --analyze --json      # deterministic review of ea
 
 `--analyze` reviews every commit against its first parent, with the commit subject as the objective, and reports a verdict, finding counts and the top findings. It makes no model call, runs no repository code and changes nothing in your checkout. Each commit is indexed in full, so it is limited to 25 commits. The JSON follows [`schemas/commit-timeline.v1.schema.json`](../../schemas/commit-timeline.v1.schema.json).
 
+### Status for dashboards and widgets
+
+```bash
+conclave status .                          # branch, upstream, uncommitted work, last review
+conclave status ~/Dev/api ~/Dev/web --json # up to 50 repositories in one call
+```
+
+A compact, poll-friendly snapshot: branch, ahead/behind of the upstream, staged, changed, new and conflicted files, HEAD, and the last saved review with its verdict and finding counts. `lastReview.headMatches` turns false once HEAD moves after a review. A folder that is not a repository is reported, not fatal. Git runs with no optional lock and no file-system monitor, so polling never writes to the repository, and no model is called. The JSON follows [`schemas/status.v1.schema.json`](../../schemas/status.v1.schema.json).
+
 ### What `check` does for you
 
 - finds the repository and the likely pull-request base;

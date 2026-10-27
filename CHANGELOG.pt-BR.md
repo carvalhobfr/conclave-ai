@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.23.0] — 2026-10-27
+
+- Novo `conclave status [path...]`: um retrato compacto de um ou mais repositórios (até 50) para painéis e widgets: branch, adiantado/atrasado em relação ao upstream, arquivos preparados, alterados, novos e em conflito, HEAD e a última revisão salva com veredito e contagem de achados, sinalizada quando o HEAD andou desde então. Uma pasta que não é repositório é informada, não é fatal. O Git roda sem lock opcional e sem monitor de arquivos, então consultar nunca escreve no repositório; nenhum modelo é chamado. `--json` segue o novo `schemas/status.v1.schema.json`. Biblioteca: novo `status()`.
+
 ## [0.22.0] — 2026-10-27
 
 - Novo `conclave commits [path]`: commits recentes, do mais novo ao mais antigo, com autor, data e tamanho. `--analyze` roda a revisão determinística em cada commit contra o primeiro pai (veredito, contagem de achados e principais achados; sem chamada de modelo, sem executar código do repositório, nada extraído). `--base`, `--head` e `--limit` escolhem o intervalo e `--json` segue o novo `schemas/commit-timeline.v1.schema.json`. Biblioteca: novo `commits()`.

@@ -147,6 +147,25 @@ describe.skipIf(!built)("conclave CLI end to end", () => {
     expect(text.stdout).toContain("Add --analyze");
   });
 
+  it("reports repository status as JSON and tolerates a folder that is not a repository", async () => {
+    const root = await repository();
+    await writeFile(join(root, "src", "refund.ts"), "export const refund = 1;\n");
+
+    const result = await runCli(["status", ".", "missing-folder", "--json"], root);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    const snapshot = JSON.parse(result.stdout) as {
+      readonly schemaVersion: number;
+      readonly summary: { readonly repositories: number; readonly unavailable: number; readonly dirty: number };
+      readonly repositories: readonly { readonly ok: boolean; readonly branch?: string | null }[];
+    };
+    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.summary).toEqual(expect.objectContaining({ repositories: 2, unavailable: 1, dirty: 1 }));
+    expect(snapshot.repositories.map((entry) => entry.ok)).toEqual([true, false]);
+    expect(snapshot.repositories[0]?.branch).toBe("main");
+  });
+
   it("exits 1 with a readable message on an unknown option", async () => {
     const root = await repository();
 
