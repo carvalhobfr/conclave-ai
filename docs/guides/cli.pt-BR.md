@@ -37,6 +37,16 @@ O menu guiado deixa qualquer ação a no máximo duas escolhas: a lista principa
 | `conclave ask . "pergunta"` | Responde uma pergunta sobre o código (precisa de provider) |
 | `conclave investigate . "comportamento"` | Questiona hipóteses sobre um comportamento (precisa de provider) |
 
+### Olhando os commits
+
+```bash
+conclave commits .                                  # últimos 10 commits: autor, data, tamanho
+conclave commits . --base origin/main               # só o que origin/main..HEAD acrescenta
+conclave commits . --limit 20 --analyze --json      # revisão determinística de cada commit
+```
+
+`--analyze` revisa cada commit contra o primeiro pai, usando o assunto do commit como objetivo, e informa veredito, contagem de achados e os principais achados. Não chama modelo, não executa código do repositório e não altera o seu checkout. Cada commit é indexado por inteiro, então o limite é 25 commits. O JSON segue [`schemas/commit-timeline.v1.schema.json`](../../schemas/commit-timeline.v1.schema.json).
+
 ### O que o `check` faz por você
 
 - encontra o repositório e a provável base do pull request;

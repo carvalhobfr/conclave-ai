@@ -101,7 +101,7 @@ describe("CLI user preferences", () => {
 
     const commands = [
       "scan", "index", "search", "retrieve", "symbol", "text", "graph", "path",
-      "ask", "investigate", "check", "review", "validate", "pr", "compare", "history",
+      "ask", "investigate", "check", "review", "validate", "pr", "compare", "history", "commits",
       "handoff", "doctor", "setup", "open", "update", "start", "eval", "eval-graph",
       "eval-reasoning", "config", "models", "init", "skill", "provider-check", "mcp", "demo", "help",
     ];

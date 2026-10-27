@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.22.0] — 2026-10-27
+
+- Novo `conclave commits [path]`: commits recentes, do mais novo ao mais antigo, com autor, data e tamanho. `--analyze` roda a revisão determinística em cada commit contra o primeiro pai (veredito, contagem de achados e principais achados; sem chamada de modelo, sem executar código do repositório, nada extraído). `--base`, `--head` e `--limit` escolhem o intervalo e `--json` segue o novo `schemas/commit-timeline.v1.schema.json`. Biblioteca: novo `commits()`.
+
 ## [0.21.0] — 2026-10-22
 
 Provedores por assinatura: Ask e Investigate podem usar o plano do Claude ou do Codex que você já paga, sem chave de API.

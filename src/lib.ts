@@ -24,10 +24,12 @@ import { createValidationContract } from "./validation/contract-parser.js";
 import { createDeterministicValidationIndex } from "./validation/deterministic-index.js";
 import { GitChangeSetService } from "./validation/git-change-set.js";
 import { SuperValidator } from "./validation/super-validator.js";
+import { commitTimeline, type CommitTimeline, type CommitTimelineOptions } from "./workflow/commit-timeline.js";
 import { inferredReviewObjective, inspectRepository } from "./workflow/repository-inspector.js";
 
 export type { PullRequestSummary, ReviewHandoff, ValidationReport, ChangeSource, ReasoningResult };
 export type { AuditFinding, AuditReport } from "./domain/audit.js";
+export type { CommitAnalysis, CommitTimeline, CommitTimelineOptions, TimelineCommit } from "./workflow/commit-timeline.js";
 
 export interface CheckOptions {
   /** Repository folder. Defaults to the current directory. */
@@ -78,6 +80,14 @@ export async function check(options: CheckOptions = {}): Promise<CheckResult> {
  */
 export async function audit(options: { readonly repository?: string; readonly write?: boolean } = {}): Promise<AuditReport> {
   return auditRepository(resolve(options.repository ?? "."), { write: options.write === true });
+}
+
+/**
+ * Recent commits, newest first, optionally with the deterministic review of each (`analyze`).
+ * Read-only; makes no model call and runs no repository code.
+ */
+export function commits(options: CommitTimelineOptions = {}): Promise<CommitTimeline> {
+  return commitTimeline(options);
 }
 
 /** Correction request for a coding agent, derived from a report. */

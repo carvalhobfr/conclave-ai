@@ -37,6 +37,16 @@ The guided menu keeps every action within two choices: the main list, plus **Mor
 | `conclave ask . "question"` | Answer a question about the code (needs a provider) |
 | `conclave investigate . "behavior"` | Challenge hypotheses about a behavior (needs a provider) |
 
+### Looking at commits
+
+```bash
+conclave commits .                                  # latest 10 commits: author, date, size
+conclave commits . --base origin/main               # only what origin/main..HEAD adds
+conclave commits . --limit 20 --analyze --json      # deterministic review of each commit
+```
+
+`--analyze` reviews every commit against its first parent, with the commit subject as the objective, and reports a verdict, finding counts and the top findings. It makes no model call, runs no repository code and changes nothing in your checkout. Each commit is indexed in full, so it is limited to 25 commits. The JSON follows [`schemas/commit-timeline.v1.schema.json`](../../schemas/commit-timeline.v1.schema.json).
+
 ### What `check` does for you
 
 - finds the repository and the likely pull-request base;

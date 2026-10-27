@@ -102,6 +102,18 @@ const COMMANDS: readonly CommandHelp[] = [
     examples: ["conclave history ."],
   },
   {
+    id: "commits",
+    usage: "conclave commits [path] [--base <ref>] [--head <ref>] [--limit N] [--analyze] [--json]",
+    group: "workflow",
+    description: localized("List recent commits, optionally with a deterministic review of each.", "Lista os commits recentes, opcionalmente com uma revisão determinística de cada um.", "Lista los commits recientes, opcionalmente con una revisión determinista de cada uno."),
+    details: localized(
+      "Newest first, with author, date and size. `--base <ref>` lists what `<ref>..HEAD` adds; `--head <ref>` lists another tip. `--analyze` reviews every commit against its first parent with the commit subject as the objective: verdict, finding counts and the top findings, with no model call and no repository code run (at most 25 commits, since each one is indexed in full). The `--json` output follows schemas/commit-timeline.v1.schema.json. Read-only: nothing is checked out or changed.",
+      "Do mais novo ao mais antigo, com autor, data e tamanho. `--base <ref>` lista o que `<ref>..HEAD` acrescenta; `--head <ref>` lista outra ponta. `--analyze` revisa cada commit contra o primeiro pai usando o assunto do commit como objetivo: veredito, contagem de achados e os principais achados, sem chamada de modelo e sem executar código do repositório (no máximo 25 commits, pois cada um é indexado por inteiro). A saída `--json` segue schemas/commit-timeline.v1.schema.json. Somente leitura: nada é extraído nem alterado.",
+      "Del más nuevo al más antiguo, con autor, fecha y tamaño. `--base <ref>` lista lo que `<ref>..HEAD` añade; `--head <ref>` lista otra punta. `--analyze` revisa cada commit contra su primer padre con el asunto del commit como objetivo: veredicto, recuento de hallazgos y los principales hallazgos, sin llamada a modelo y sin ejecutar código del repositorio (como máximo 25 commits, porque cada uno se indexa completo). La salida `--json` sigue schemas/commit-timeline.v1.schema.json. Solo lectura: nada se extrae ni se cambia.",
+    ),
+    examples: ["conclave commits .", "conclave commits . --base origin/main --analyze --json"],
+  },
+  {
     id: "handoff",
     usage: "conclave handoff [path] [--json]",
     group: "workflow",

@@ -117,6 +117,36 @@ describe.skipIf(!built)("conclave CLI end to end", () => {
     expect(payload.report.findings.map((finding) => finding.kind)).toContain("no-change");
   });
 
+  it("lists commits as JSON and reviews each one with --analyze", async () => {
+    const root = await repository();
+    await writeFile(join(root, "src", "refund.ts"), "export function refund(cents: number) {\n  return Math.max(0, cents);\n}\n");
+    await git(root, ["commit", "-am", "fix: clamp refunds"]);
+
+    const listed = await runCli(["commits", ".", "--json"], root);
+    expect(listed.stderr).toBe("");
+    expect(listed.code).toBe(0);
+    const timeline = JSON.parse(listed.stdout) as {
+      readonly schemaVersion: number;
+      readonly analyzed: boolean;
+      readonly commits: readonly { readonly subject: string; readonly analysis?: unknown }[];
+    };
+    expect(timeline.schemaVersion).toBe(1);
+    expect(timeline.analyzed).toBe(false);
+    expect(timeline.commits.map((item) => item.subject)).toEqual(["fix: clamp refunds", "baseline"]);
+    expect(timeline.commits.every((item) => item.analysis === undefined)).toBe(true);
+
+    const reviewed = await runCli(["commits", ".", "--analyze", "--json"], root);
+    expect(reviewed.code).toBe(0);
+    const analysed = JSON.parse(reviewed.stdout) as {
+      readonly commits: readonly { readonly analysis?: { readonly status: string } }[];
+    };
+    expect(analysed.commits.map((item) => item.analysis?.status)).toEqual(["analyzed", "skipped"]);
+
+    const text = await runCli(["commits", "."], root);
+    expect(text.stdout).toContain("fix: clamp refunds");
+    expect(text.stdout).toContain("Add --analyze");
+  });
+
   it("exits 1 with a readable message on an unknown option", async () => {
     const root = await repository();
 

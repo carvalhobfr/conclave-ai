@@ -98,6 +98,7 @@ import { createPullRequestSummary } from "./domain/pr-summary.js";
 import { createReviewHandoff } from "./domain/review-handoff.js";
 import { listReviewHistory, saveReviewHistory, type ReviewHistoryRecord } from "./storage/review-history.js";
 import { inferredReviewObjective, inspectRepository } from "./workflow/repository-inspector.js";
+import { commitTimeline, renderCommitTimeline } from "./workflow/commit-timeline.js";
 import {
   cliHelp,
   guidedChoices,
@@ -1350,6 +1351,21 @@ async function showReviewHistory(args: readonly string[]): Promise<void> {
   }
 }
 
+async function commitsCommand(args: readonly string[]): Promise<void> {
+  const parsed = parseArguments(args);
+  if (parsed.positionals.length > 1) throw new Error("commits accepts at most one repository path");
+  const timeline = await commitTimeline({
+    repository: parsed.positionals[0] ?? ".",
+    ...(parsed.branch === undefined ? {} : { base: parsed.branch }),
+    ...(parsed.head === undefined ? {} : { head: parsed.head }),
+    limit: parsed.limit,
+    analyze: parsed.analyze,
+    interruptCleanup,
+  });
+  if (parsed.json) print(timeline, true);
+  else console.log(renderCommitTimeline(timeline));
+}
+
 async function showLatestHandoff(args: readonly string[]): Promise<void> {
   const parsed = parseArguments(args);
   const repositoryRoot = resolve(parsed.positionals[0] ?? ".");
@@ -2025,7 +2041,7 @@ async function runDemo(): Promise<void> {
 }
 
 const KNOWN_COMMANDS = [
-  "check", "compare", "open", "review", "validate", "pr", "history", "handoff", "doctor", "setup", "update", "start",
+  "check", "compare", "open", "review", "validate", "pr", "history", "commits", "handoff", "doctor", "setup", "update", "start",
   "scan", "index", "search", "retrieve", "symbol", "text", "graph", "path", "ask", "investigate", "smoke", "collect",
   "audit", "findings", "issues",
   "criteria", "eval", "eval-graph", "eval-reasoning", "config", "models", "init", "skill", "provider-check", "mcp", "demo", "tools", "help",
@@ -2155,6 +2171,9 @@ async function main(): Promise<void> {
       return;
     case "handoff":
       await showLatestHandoff(args);
+      return;
+    case "commits":
+      await commitsCommand(args);
       return;
     case "doctor":
       await doctorRepository(args);

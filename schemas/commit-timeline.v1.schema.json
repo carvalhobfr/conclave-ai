@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://conclave.dev/schemas/commit-timeline.v1.schema.json",
+  "title": "Conclave Commit Timeline v1",
+  "description": "Output of `conclave commits --json`: recent commits, newest first, optionally with the deterministic review of each. Read-only; no model is called.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "repository",
+    "range",
+    "analyzed",
+    "truncated",
+    "summary",
+    "commits"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "name", "branch"],
+      "properties": {
+        "root": { "type": "string" },
+        "name": { "type": "string" },
+        "branch": { "type": "string" }
+      }
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "head", "limit"],
+      "properties": {
+        "base": { "type": ["string", "null"] },
+        "head": { "type": "string" },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
+      }
+    },
+    "analyzed": { "type": "boolean" },
+    "truncated": { "type": "boolean" },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commits", "verdicts", "unanalyzed"],
+      "properties": {
+        "commits": { "type": "integer", "minimum": 0 },
+        "verdicts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pass", "warn", "block", "inconclusive"],
+          "properties": {
+            "pass": { "type": "integer", "minimum": 0 },
+            "warn": { "type": "integer", "minimum": 0 },
+            "block": { "type": "integer", "minimum": 0 },
+            "inconclusive": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "unanalyzed": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "commits": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/commit" }
+    }
+  },
+  "$defs": {
+    "commit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "shortSha", "subject", "author", "authoredAt", "parents", "isMerge"],
+      "properties": {
+        "sha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "shortSha": { "type": "string" },
+        "subject": { "type": "string" },
+        "author": { "type": "string" },
+        "authoredAt": { "type": "string" },
+        "parents": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" }
+        },
+        "isMerge": { "type": "boolean" },
+        "stats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["filesChanged", "additions", "deletions"],
+          "properties": {
+            "filesChanged": { "type": "integer", "minimum": 0 },
+            "additions": { "type": "integer", "minimum": 0 },
+            "deletions": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "analysis": { "$ref": "#/$defs/analysis" }
+      }
+    },
+    "analysis": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "verdict",
+            "findings",
+            "topFindings",
+            "filesChanged",
+            "symbolsChanged",
+            "impactedFiles",
+            "impactedSymbols"
+          ],
+          "properties": {
+            "status": { "const": "analyzed" },
+            "verdict": { "enum": ["pass", "warn", "block", "inconclusive"] },
+            "findings": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["blocking", "warning", "info"],
+              "properties": {
+                "blocking": { "type": "integer", "minimum": 0 },
+                "warning": { "type": "integer", "minimum": 0 },
+                "info": { "type": "integer", "minimum": 0 }
+              }
+            },
+            "topFindings": {
+              "type": "array",
+              "maxItems": 5,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "severity", "title"],
+                "properties": {
+                  "kind": { "type": "string" },
+                  "severity": { "enum": ["info", "warning", "blocking"] },
+                  "title": { "type": "string" }
+                }
+              }
+            },
+            "filesChanged": { "type": "integer", "minimum": 0 },
+            "symbolsChanged": { "type": "integer", "minimum": 0 },
+            "impactedFiles": { "type": "integer", "minimum": 0 },
+            "impactedSymbols": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason"],
+          "properties": {
+            "status": { "const": "skipped" },
+            "reason": { "const": "root-commit" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason"],
+          "properties": {
+            "status": { "const": "failed" },
+            "reason": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}

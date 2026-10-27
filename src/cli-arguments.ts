@@ -36,6 +36,7 @@ export interface ParsedArguments {
   readonly attestationWorkflow: string | undefined;
   readonly seriesId: string | undefined;
   readonly newSeries: boolean;
+  readonly analyze: boolean;
 }
 
 const GRAPH_OPERATIONS: readonly GraphOperation[] = [
@@ -75,6 +76,7 @@ export function parseArguments(args: readonly string[]): ParsedArguments {
   let attestationWorkflow: string | undefined;
   let seriesId: string | undefined;
   let newSeries = false;
+  let analyze = false;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--json") {
@@ -99,6 +101,10 @@ export function parseArguments(args: readonly string[]): ParsedArguments {
     }
     if (argument === "--new-series") {
       newSeries = true;
+      continue;
+    }
+    if (argument === "--analyze") {
+      analyze = true;
       continue;
     }
     if (argument === "--base" || argument === "--branch" || argument === "--head" || argument === "--commit" || argument === "--objective" || argument === "--contract" || argument === "--previous-report" || argument === "--receipt" || argument === "--series" || argument === "--attested-receipt" || argument === "--attestation-repository" || argument === "--attestation-workflow") {
@@ -198,5 +204,6 @@ export function parseArguments(args: readonly string[]): ParsedArguments {
     attestationWorkflow,
     seriesId,
     newSeries,
+    analyze,
   };
 }

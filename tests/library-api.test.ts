@@ -59,6 +59,6 @@ describe("library API", () => {
     expect(manifest.exports["."]).toBeDefined();
     // The bundle exists only after a build, and typecheck runs before one, so its path is not a literal the compiler resolves.
     const bundle = "../dist/lib.js";
-    if (existsSync("dist/lib.js")) expect(Object.keys(await import(/* @vite-ignore */ bundle) as Record<string, unknown>)).toEqual(expect.arrayContaining(["check", "ask", "handoff"]));
+    if (existsSync("dist/lib.js")) expect(Object.keys(await import(/* @vite-ignore */ bundle) as Record<string, unknown>)).toEqual(expect.arrayContaining(["check", "ask", "handoff", "commits"]));
   });
 });

@@ -22,19 +22,19 @@ const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._/@{}+~^-]*$/u;
 const ARTIFACT_DIRECTORY = ".conclave";
 const EXCLUDE_ARTIFACTS = `:(exclude,glob)${ARTIFACT_DIRECTORY}/**`;
 
-interface GitOutput {
+export interface GitOutput {
   readonly stdout: string;
   readonly stderr: string;
 }
 
-function safeRef(value: string, label: string): string {
+export function safeRef(value: string, label: string): string {
   if (!SAFE_REF.test(value) || value.startsWith("-") || value.includes("..")) {
     throw new Error(label + " contains an unsafe Git ref");
   }
   return value;
 }
 
-function runGit(
+export function runGit(
   repositoryRoot: string,
   args: readonly string[],
   extraEnvironment: Readonly<Record<string, string>> = {},

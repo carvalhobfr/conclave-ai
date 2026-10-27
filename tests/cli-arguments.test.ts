@@ -29,7 +29,16 @@ describe("CLI argument parser", () => {
       attestationWorkflow: undefined,
       seriesId: undefined,
       newSeries: false,
+      analyze: false,
     });
+  });
+
+  it("reads --analyze as a switch that takes no value", () => {
+    expect(parseArguments([".", "--analyze", "--limit", "5"])).toEqual(expect.objectContaining({
+      positionals: ["."],
+      analyze: true,
+      limit: 5,
+    }));
   });
 
   it("keeps positional order while flags are interleaved", () => {

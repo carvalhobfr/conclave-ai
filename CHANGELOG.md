@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.22.0] — 2026-10-27
+
+- New `conclave commits [path]`: recent commits, newest first, with author, date and size. `--analyze` runs the deterministic review on each commit against its first parent (verdict, finding counts and top findings; no model call, no repository code run, nothing checked out). `--base`, `--head` and `--limit` choose the range and `--json` follows the new `schemas/commit-timeline.v1.schema.json`. Library: new `commits()`.
+
 ## [0.21.0] — 2026-10-22
 
 Subscription providers: Ask and Investigate can run on the Claude or Codex plan you already pay for, without an API key.
