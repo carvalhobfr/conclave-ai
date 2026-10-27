@@ -13,6 +13,7 @@ import { auditRepository } from "../src/analysis/repository-audit.js";
 import { ConclaveProductService } from "../src/web/product-service.js";
 import type { EvidenceExcerpt, FindingDetail, FindingView, ProposalCreation, ProposalDetail } from "../src/workflow/triage-service.js";
 import { createConclaveWebServer } from "../src/web/server.js";
+import type { CommitTimeline } from "../src/workflow/commit-timeline.js";
 
 const execFileAsync = promisify(execFile);
 const servers: ReturnType<typeof createConclaveWebServer>[] = [];
@@ -268,6 +269,38 @@ describe("Conclave web server routes", () => {
     const history = await fetch(`${origin}/api/history?projectId=${encodeURIComponent(project.id)}`);
     expect(history.status).toBe(200);
     expect(Array.isArray(await history.json())).toBe(true);
+  });
+
+  it("lists commits over HTTP, reviews them on request, and refuses bad input", async () => {
+    const { parent, root } = await repositoryFixture();
+    await writeFile(join(root, "src", "session.ts"), "export function restoreSession() { return true; }\n");
+    await git(root, ["commit", "-am", "fix: restore the session"]);
+    const fetchSpy = vi.fn(() => Promise.reject(new Error("The commits API must not call a provider")));
+    const origin = await listen(createConclaveWebServer({ product: new ConclaveProductService({ allowedRoot: parent, environment: {}, fetchImplementation: fetchSpy }) }));
+    const project = await (await postJson(origin, "/api/projects/open", { path: root })).json() as ProjectView;
+    const query = `projectId=${encodeURIComponent(project.id)}`;
+
+    const plain = await fetch(`${origin}/api/commits?${query}`);
+    expect(plain.status).toBe(200);
+    const listed = await plain.json() as CommitTimeline;
+    expect(listed.analyzed).toBe(false);
+    expect(listed.commits.map((item) => item.subject)).toEqual(["fix: restore the session", "baseline"]);
+
+    const reviewed = await (await fetch(`${origin}/api/commits?${query}&analyze=true&limit=2`)).json() as CommitTimeline;
+    expect(reviewed.analyzed).toBe(true);
+    expect(reviewed.commits.map((item) => item.analysis?.status)).toEqual(["analyzed", "skipped"]);
+
+    const tooMany = await fetch(`${origin}/api/commits?${query}&analyze=true&limit=26`);
+    expect(tooMany.status).toBe(400);
+    expect(((await tooMany.json()) as { error: { code: string } }).error.code).toBe("commits_failed");
+    expect((await fetch(`${origin}/api/commits?${query}&limit=abc`)).status).toBe(400);
+    expect((await fetch(`${origin}/api/commits`)).status).toBe(400);
+
+    const demo = await (await postJson(origin, "/api/projects/demo", {})).json() as ProjectView;
+    const demoResponse = await fetch(`${origin}/api/commits?projectId=${encodeURIComponent(demo.id)}`);
+    expect(demoResponse.status).toBe(400);
+    expect(((await demoResponse.json()) as { error: { code: string } }).error.code).toBe("commits_unavailable");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("serves the audit triage workflow and never approves without the reviewed revision", async () => {

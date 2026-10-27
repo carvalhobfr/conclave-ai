@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.24.0] — 2026-10-27
+
+- Novos `conclave plugin manifest [--json]` e `conclave plugin schema <id>`: o contrato que um app anfitrião (painel, launcher ou app com widgets) lê para usar o Conclave sem conhecer sua CLI. O manifesto lista os comandos que ele pode executar sem shell e como montar seus argumentos, o que cada um escreve, o schema da saída e os widgets (`repository-health`, `recent-commits`, `commit-verdicts`) e ações (`check-repository`, `review-last-commit`, `show-agent-prompt`, `open-cockpit`) construídos sobre eles; `schemas/plugin-manifest.v1.schema.json` o descreve, e os testes passam o argv prescrito pelo parser real e cada campo de widget pela saída real. Cockpit: nova aba **Commits** com os últimos commits e revisão determinística opcional de cada um, sobre `GET /api/commits` (somente leitura, sem chamada de modelo).
+
 ## [0.23.1] — 2026-10-27
 
 - Correção de release: o 0.23.0 foi tagueado mas nunca publicado, porque a verificação de release falhou em um teste do `status` que dependia de identidade Git no runner. O 0.23.1 é o primeiro 0.23 publicado e traz tudo o que está listado no 0.23.0.

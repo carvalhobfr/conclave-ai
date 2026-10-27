@@ -1,6 +1,7 @@
 import type { FindingFeedback } from "../../src/storage/finding-feedback.js";
 import type { SavedAcceptanceContract } from "../../src/storage/acceptance-contract.js";
 import type { ValidationContract } from "../../src/domain/validation.js";
+import type { CommitTimeline } from "../../src/workflow/commit-timeline.js";
 import type {
   GraphView,
   ProductRunView,
@@ -62,5 +63,6 @@ export const api = {
   },
   run: (projectId: string, intent: "ask" | "investigate", query: string): Promise<ProductRunView> => request("/api/run", json({ projectId, intent, query })),
   graph: (projectId: string, symbol: string): Promise<GraphView> => request(`/api/graph?projectId=${encodeURIComponent(projectId)}&symbol=${encodeURIComponent(symbol)}`),
+  commits: (projectId: string, options: { readonly limit?: number; readonly analyze?: boolean } = {}): Promise<CommitTimeline> => request(`/api/commits?projectId=${encodeURIComponent(projectId)}${options.limit === undefined ? "" : `&limit=${String(options.limit)}`}${options.analyze === true ? "&analyze=true" : ""}`),
   history: (projectId: string): Promise<readonly ReviewHistoryView[]> => request(`/api/history?projectId=${encodeURIComponent(projectId)}`),
 };

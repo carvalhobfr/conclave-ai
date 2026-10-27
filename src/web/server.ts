@@ -433,6 +433,16 @@ export function createConclaveWebServer(options: ConclaveWebServerOptions = {}) 
         send(response, 200, product.graph(string(url.searchParams.get("projectId"), "Project"), string(url.searchParams.get("symbol"), "Symbol")));
         return;
       }
+      if (url.pathname === "/api/commits" && request.method === "GET") {
+        const requestedLimit = url.searchParams.get("limit");
+        const limit = requestedLimit === null ? undefined : Number(requestedLimit);
+        if (limit !== undefined && !Number.isInteger(limit)) throw new ProductServiceError("invalid_request", "Limit must be a whole number.", "Provide a limit between 1 and 100.");
+        send(response, 200, await product.commits(string(url.searchParams.get("projectId"), "Project"), {
+          ...(limit === undefined ? {} : { limit }),
+          analyze: url.searchParams.get("analyze") === "true",
+        }));
+        return;
+      }
       if (url.pathname === "/api/history" && request.method === "GET") {
         send(response, 200, await product.history(string(url.searchParams.get("projectId"), "Project")));
         return;

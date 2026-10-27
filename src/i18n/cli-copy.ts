@@ -126,6 +126,18 @@ const COMMANDS: readonly CommandHelp[] = [
     examples: ["conclave status .", "conclave status ~/Dev/api ~/Dev/web --json"],
   },
   {
+    id: "plugin",
+    usage: "conclave plugin manifest [--json] | conclave plugin schema <id>",
+    group: "advanced",
+    description: localized("Describe Conclave to a host app: commands, widgets, actions and schemas.", "Descreve o Conclave para um app anfitrião: comandos, widgets, ações e schemas.", "Describe Conclave a una app anfitriona: comandos, widgets, acciones y esquemas."),
+    details: localized(
+      "For dashboards, launchers and apps with widgets. `manifest --json` prints the plugin manifest (schemas/plugin-manifest.v1.schema.json): the commands a host may run without a shell, how to build their arguments, the widgets and actions built on them, what each one writes, and the schemas of their output. `schema <id>` prints one of those schemas, so a host never has to locate the package. Everything it lists is read-only for the repository: no network, no model, no repository code run.",
+      "Para painéis, launchers e apps com widgets. `manifest --json` mostra o manifesto do plugin (schemas/plugin-manifest.v1.schema.json): os comandos que um anfitrião pode executar sem shell, como montar seus argumentos, os widgets e ações construídos sobre eles, o que cada um escreve e os schemas da saída. `schema <id>` mostra um desses schemas, e o anfitrião nunca precisa localizar o pacote. Tudo o que lista é somente leitura para o repositório: sem rede, sem modelo, sem executar código do repositório.",
+      "Para paneles, launchers y apps con widgets. `manifest --json` muestra el manifiesto del plugin (schemas/plugin-manifest.v1.schema.json): los comandos que un anfitrión puede ejecutar sin shell, cómo construir sus argumentos, los widgets y acciones construidos sobre ellos, qué escribe cada uno y los esquemas de su salida. `schema <id>` muestra uno de esos esquemas, así el anfitrión nunca tiene que localizar el paquete. Todo lo que lista es de solo lectura para el repositorio: sin red, sin modelo, sin ejecutar código del repositorio.",
+    ),
+    examples: ["conclave plugin manifest --json", "conclave plugin schema status.v1"],
+  },
+  {
     id: "handoff",
     usage: "conclave handoff [path] [--json]",
     group: "workflow",

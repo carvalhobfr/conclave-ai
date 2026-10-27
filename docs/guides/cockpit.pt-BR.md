@@ -38,7 +38,7 @@ A barra lateral tem três grupos:
 | Grupo | Telas |
 | --- | --- |
 | Repository | **Overview**, **Repository audits**, **Findings inbox**, **Issue proposals**, **Architecture** |
-| Changes | **Review**, **Ask**, **Investigate**, **History** |
+| Changes | **Review**, **Ask**, **Investigate**, **History**, **Commits** |
 | Configuration | **Settings** |
 
 As telas de Repository precisam de um repositório local; o demo não tem estado de auditoria. Elas leem e gravam os mesmos arquivos em `.conclave` que `conclave audit`, `conclave findings` e `conclave issues`.
@@ -140,3 +140,7 @@ A chave vai pela conexão loopback para o mesmo arquivo de configurações que a
 ## Histórico
 
 Todo review feito no cockpit ou com `conclave check` aparece aqui, do mais novo ao mais antigo, e fica só na sua máquina. **Continue this review** inicia o próximo review na mesma série.
+
+## Commits
+
+Os últimos commits do repositório, do mais novo ao mais antigo, com autor, data e tamanho. **Review the latest 10 commits** roda a revisão determinística em cada um contra o primeiro pai, com o assunto do commit como objetivo, e mostra veredito, contagem de achados e os principais achados. Não chama modelo e não altera o seu checkout. Os mesmos dados saem em `conclave commits . --json`.

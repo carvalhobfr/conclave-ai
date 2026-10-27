@@ -56,6 +56,15 @@ conclave status ~/Dev/api ~/Dev/web --json # até 50 repositórios numa chamada
 
 Um retrato compacto, feito para ser consultado várias vezes: branch, adiantado/atrasado em relação ao upstream, arquivos preparados, alterados, novos e em conflito, HEAD e a última revisão salva com veredito e contagem de achados. `lastReview.headMatches` vira falso quando o HEAD anda depois de uma revisão. Uma pasta que não é repositório é informada, não é fatal. O Git roda sem lock opcional e sem monitor de arquivos, então consultar nunca escreve no repositório, e nenhum modelo é chamado. O JSON segue [`schemas/status.v1.schema.json`](../../schemas/status.v1.schema.json).
 
+### Usando o Conclave a partir de outro app
+
+```bash
+conclave plugin manifest --json     # comandos, widgets e ações que um app anfitrião pode usar
+conclave plugin schema status.v1    # o JSON Schema de uma saída
+```
+
+O manifesto ([`schemas/plugin-manifest.v1.schema.json`](../../schemas/plugin-manifest.v1.schema.json)) é o contrato para painéis, launchers e apps com widgets: quais comandos ele pode executar sem shell, como montar os argumentos (o `argv` do comando, depois os parâmetros posicionais em ordem, depois cada flag informada), o que cada um escreve, o schema da saída e os widgets e ações construídos sobre eles (`repository-health`, `recent-commits`, `commit-verdicts`; `check-repository`, `review-last-commit`, `show-agent-prompt`, `open-cockpit`). Tudo o que ele lista deixa o repositório intacto, não usa rede nem modelo e não executa código do repositório; `check` e `open-cockpit` também escrevem o estado do próprio Conclave em `.conclave`, e o manifesto informa isso. `check` sai com 1 para uma mudança bloqueada e 2 para uma inconclusiva: são resultados, não falhas (`resultExitCodes`). O número de `protocol` só muda quando um anfitrião escrito para o anterior leria o manifesto errado.
+
 ### O que o `check` faz por você
 
 - encontra o repositório e a provável base do pull request;

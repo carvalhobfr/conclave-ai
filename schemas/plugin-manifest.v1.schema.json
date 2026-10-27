@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://conclave.dev/schemas/plugin-manifest.v1.schema.json",
+  "title": "Conclave Plugin Manifest v1",
+  "description": "Output of `conclave plugin manifest --json`: what a host application (a dashboard, launcher or app with widgets) needs to drive Conclave without knowing its CLI. Commands run without a shell; each argument is its own argv element. To build a command line, take `argv`, append the positional parameters in declared order, then each provided flagged parameter as its flag (and its value, unless the type is `switch`).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "protocol",
+    "id",
+    "name",
+    "version",
+    "description",
+    "invocation",
+    "requires",
+    "safety",
+    "commands",
+    "widgets",
+    "actions",
+    "schemas"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "protocol": { "const": 1, "description": "Bumped only for a change a host written against the previous protocol would misread." },
+    "id": { "const": "conclave" },
+    "name": { "const": "Conclave" },
+    "version": { "type": "string", "description": "The installed conclave-ai version." },
+    "description": { "type": "string" },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executable", "shell"],
+      "properties": {
+        "executable": { "const": "conclave" },
+        "shell": { "const": false }
+      }
+    },
+    "requires": { "type": "array", "items": { "type": "string" } },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["readOnly", "mutatesRepository", "usesNetwork", "callsModel", "executesRepositoryCode"],
+      "properties": {
+        "readOnly": { "const": true },
+        "mutatesRepository": { "const": false },
+        "usesNetwork": { "const": false },
+        "callsModel": { "const": false },
+        "executesRepositoryCode": { "const": false }
+      }
+    },
+    "commands": { "type": "array", "items": { "$ref": "#/$defs/command" } },
+    "widgets": { "type": "array", "items": { "$ref": "#/$defs/widget" } },
+    "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
+    "schemas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "file"],
+        "properties": {
+          "id": { "type": "string" },
+          "file": { "type": "string", "description": "Path inside the package. Read it with `conclave plugin schema <id>`." }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "scalar": { "type": ["string", "number", "boolean"] },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "description", "required"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "enum": ["repository", "repositories", "git-ref", "integer", "switch", "text"] },
+        "description": { "type": "string" },
+        "required": { "type": "boolean" },
+        "flag": { "type": "string", "pattern": "^--[a-z-]+$", "description": "Absent for a positional parameter." },
+        "minimum": { "type": "integer" },
+        "maximum": { "type": "integer" }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "description", "argv", "parameters", "output", "resultExitCodes", "timeoutSeconds", "cost", "effects", "longRunning"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "argv": { "type": "array", "items": { "type": "string" }, "description": "Leading arguments, always passed." },
+        "parameters": { "type": "array", "items": { "$ref": "#/$defs/parameter" } },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format"],
+          "properties": {
+            "format": { "enum": ["json", "text"] },
+            "schema": { "type": "string", "description": "Id of a schema served by `conclave plugin schema <id>`." },
+            "at": { "type": "string", "description": "Key of the payload that holds the document the schema describes; the payload itself when absent." }
+          }
+        },
+        "resultExitCodes": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Exit codes that are results, not failures. Any other non-zero code is an error."
+        },
+        "timeoutSeconds": { "type": "integer", "minimum": 1 },
+        "cost": { "enum": ["low", "high"] },
+        "effects": {
+          "type": "array",
+          "items": { "enum": ["writes-conclave-state", "starts-local-server"] },
+          "description": "Everything the command does besides reading. Empty means it only reads."
+        },
+        "longRunning": { "type": "boolean" }
+      }
+    },
+    "widget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "description", "command", "arguments", "sizes", "refresh", "fields"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "command": { "type": "string" },
+        "arguments": { "type": "object", "additionalProperties": { "$ref": "#/$defs/scalar" } },
+        "sizes": { "type": "array", "items": { "enum": ["small", "medium", "large"] }, "minItems": 1 },
+        "refresh": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minIntervalSeconds"],
+          "properties": { "minIntervalSeconds": { "type": "integer", "minimum": 1 } }
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "path"],
+            "properties": {
+              "label": { "type": "string" },
+              "path": { "type": "string", "description": "Path into the command's JSON output; `[]` marks every item of an array." }
+            }
+          }
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "description", "command", "arguments", "binds", "confirmation"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "command": { "type": "string" },
+        "arguments": { "type": "object", "additionalProperties": { "$ref": "#/$defs/scalar" } },
+        "binds": { "type": "array", "items": { "type": "string" }, "description": "Parameters the host fills in when the action runs." },
+        "confirmation": { "const": "none", "description": "Every action leaves the repository untouched, so none asks for confirmation." }
+      }
+    }
+  }
+}

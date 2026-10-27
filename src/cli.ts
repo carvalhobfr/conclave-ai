@@ -100,6 +100,7 @@ import { listReviewHistory, saveReviewHistory, type ReviewHistoryRecord } from "
 import { inferredReviewObjective, inspectRepository } from "./workflow/repository-inspector.js";
 import { commitTimeline, renderCommitTimeline } from "./workflow/commit-timeline.js";
 import { renderRepositoryStatus, repositoryStatus } from "./workflow/repository-status.js";
+import { pluginManifest, readPluginSchema, renderPluginManifest } from "./workflow/plugin-manifest.js";
 import {
   cliHelp,
   guidedChoices,
@@ -1374,6 +1375,28 @@ async function statusCommand(args: readonly string[]): Promise<void> {
   else console.log(renderRepositoryStatus(snapshot));
 }
 
+/** `conclave plugin manifest|schema`: the contract a host application reads to drive Conclave. */
+async function pluginCommand(args: readonly string[]): Promise<void> {
+  const [subcommand, ...rest] = args;
+  const parsed = parseArguments(rest);
+  const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  if (subcommand === "manifest") {
+    if (parsed.positionals.length > 0) throw new Error("plugin manifest takes no arguments");
+    const packageJson = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8")) as { version?: string };
+    const manifest = pluginManifest(packageJson.version ?? "unknown");
+    if (parsed.json) print(manifest, true);
+    else console.log(renderPluginManifest(manifest));
+    return;
+  }
+  if (subcommand === "schema") {
+    const [id] = parsed.positionals;
+    if (id === undefined || parsed.positionals.length !== 1) throw new Error("plugin schema requires a schema id; list them with `conclave plugin manifest`");
+    process.stdout.write(await readPluginSchema(packageRoot, id));
+    return;
+  }
+  throw new Error("plugin requires the subcommand manifest or schema");
+}
+
 async function showLatestHandoff(args: readonly string[]): Promise<void> {
   const parsed = parseArguments(args);
   const repositoryRoot = resolve(parsed.positionals[0] ?? ".");
@@ -2049,7 +2072,7 @@ async function runDemo(): Promise<void> {
 }
 
 const KNOWN_COMMANDS = [
-  "check", "compare", "open", "review", "validate", "pr", "history", "commits", "status", "handoff", "doctor", "setup", "update", "start",
+  "check", "compare", "open", "review", "validate", "pr", "history", "commits", "status", "plugin", "handoff", "doctor", "setup", "update", "start",
   "scan", "index", "search", "retrieve", "symbol", "text", "graph", "path", "ask", "investigate", "smoke", "collect",
   "audit", "findings", "issues",
   "criteria", "eval", "eval-graph", "eval-reasoning", "config", "models", "init", "skill", "provider-check", "mcp", "demo", "tools", "help",
@@ -2185,6 +2208,9 @@ async function main(): Promise<void> {
       return;
     case "status":
       await statusCommand(args);
+      return;
+    case "plugin":
+      await pluginCommand(args);
       return;
     case "doctor":
       await doctorRepository(args);

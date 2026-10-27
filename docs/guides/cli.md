@@ -56,6 +56,15 @@ conclave status ~/Dev/api ~/Dev/web --json # up to 50 repositories in one call
 
 A compact, poll-friendly snapshot: branch, ahead/behind of the upstream, staged, changed, new and conflicted files, HEAD, and the last saved review with its verdict and finding counts. `lastReview.headMatches` turns false once HEAD moves after a review. A folder that is not a repository is reported, not fatal. Git runs with no optional lock and no file-system monitor, so polling never writes to the repository, and no model is called. The JSON follows [`schemas/status.v1.schema.json`](../../schemas/status.v1.schema.json).
 
+### Driving Conclave from another app
+
+```bash
+conclave plugin manifest --json     # commands, widgets and actions a host app can use
+conclave plugin schema status.v1    # the JSON Schema of one output
+```
+
+The manifest ([`schemas/plugin-manifest.v1.schema.json`](../../schemas/plugin-manifest.v1.schema.json)) is the contract for dashboards, launchers and apps with widgets: which commands it may run without a shell, how to build their arguments (the command's `argv`, then positional parameters in order, then each provided flag), what each one writes, the schema of its output, and the widgets and actions built on them (`repository-health`, `recent-commits`, `commit-verdicts`; `check-repository`, `review-last-commit`, `show-agent-prompt`, `open-cockpit`). Everything it lists leaves the repository untouched, makes no network or model call and runs no repository code; `check` and `open-cockpit` also write Conclave's own state under `.conclave`, and the manifest says so. `check` exits 1 for a blocked change and 2 for an inconclusive one: those are results, not failures (`resultExitCodes`). The `protocol` number changes only when a host written against the previous one would misread the manifest.
+
 ### What `check` does for you
 
 - finds the repository and the likely pull-request base;

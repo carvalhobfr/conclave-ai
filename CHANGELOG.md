@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## [0.24.0] — 2026-10-27
+
+- New `conclave plugin manifest [--json]` and `conclave plugin schema <id>`: the contract a host app (a dashboard, launcher or app with widgets) reads to drive Conclave without knowing its CLI. The manifest lists the commands it may run without a shell and how to build their arguments, what each one writes, the schema of its output, and the widgets (`repository-health`, `recent-commits`, `commit-verdicts`) and actions (`check-repository`, `review-last-commit`, `show-agent-prompt`, `open-cockpit`) built on them; `schemas/plugin-manifest.v1.schema.json` describes it, and tests run the argv it prescribes through the real parser and every widget field against real output. Cockpit: new **Commits** tab with the latest commits and an opt-in deterministic review of each, backed by `GET /api/commits` (read-only, no model call).
+
 ## [0.23.1] — 2026-10-27
 
 - Release fix: 0.23.0 was tagged but never published, because its release verification failed on a `status` test that needed a Git identity on the runner. 0.23.1 is the first published 0.23 and carries everything listed under 0.23.0.

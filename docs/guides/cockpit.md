@@ -38,7 +38,7 @@ The sidebar has three groups:
 | Group | Screens |
 | --- | --- |
 | Repository | **Overview**, **Repository audits**, **Findings inbox**, **Issue proposals**, **Architecture** |
-| Changes | **Review**, **Ask**, **Investigate**, **History** |
+| Changes | **Review**, **Ask**, **Investigate**, **History**, **Commits** |
 | Configuration | **Settings** |
 
 The Repository screens need a local repository; the demo has no audit state. They read and write the same `.conclave` files as `conclave audit`, `conclave findings` and `conclave issues`.
@@ -140,3 +140,7 @@ The key goes over the loopback connection to the same settings file the CLI uses
 ## History
 
 Every review from the cockpit or `conclave check` is listed here, newest first, and stays on your machine. **Continue this review** starts the next review in the same series.
+
+## Commits
+
+The latest commits of the repository, newest first, with author, date and size. **Review the latest 10 commits** runs the deterministic review on each one against its first parent, with the commit subject as the objective, and shows a verdict, finding counts and the top findings. It makes no model call and changes nothing in your checkout. The same data is available as `conclave commits . --json`.

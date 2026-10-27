@@ -7,6 +7,9 @@ import { promisify } from "node:util";
 
 import { afterAll, describe, expect, it } from "vitest";
 
+import { buildArgv, readPath } from "./helpers/plugin-host.js";
+import type { PluginManifest } from "../src/workflow/plugin-manifest.js";
+
 const execFileAsync = promisify(execFile);
 const CLI = resolve("dist/cli.js");
 
@@ -164,6 +167,43 @@ describe.skipIf(!built)("conclave CLI end to end", () => {
     expect(snapshot.summary).toEqual(expect.objectContaining({ repositories: 2, unavailable: 1, dirty: 1 }));
     expect(snapshot.repositories.map((entry) => entry.ok)).toEqual([true, false]);
     expect(snapshot.repositories[0]?.branch).toBe("main");
+  });
+
+  it("serves a manifest a host can drive: every widget field exists in the command output", async () => {
+    const root = await repository();
+    await writeFile(join(root, "src", "refund.ts"), "export const refund = 1;\n");
+    await git(root, ["commit", "-am", "fix: simplify refunds"]);
+
+    const served = await runCli(["plugin", "manifest", "--json"], root);
+    expect(served.stderr).toBe("");
+    expect(served.code).toBe(0);
+    const manifest = JSON.parse(served.stdout) as PluginManifest;
+    const installed = JSON.parse(await (await import("node:fs/promises")).readFile("package.json", "utf8")) as { version: string };
+    expect(manifest.version).toBe(installed.version);
+
+    for (const widget of manifest.widgets) {
+      const target = manifest.commands.find((item) => item.id === widget.command);
+      if (target === undefined) throw new Error(`No command for ${widget.id}`);
+      const values: Record<string, string | number | boolean | readonly string[]> = { ...widget.arguments };
+      for (const parameter of target.parameters) {
+        if (parameter.type === "repository") values[parameter.name] = ".";
+        if (parameter.type === "repositories") values[parameter.name] = ["."];
+      }
+      const run = await runCli(buildArgv(target, values), root);
+      expect(run.code, `${widget.id}: ${run.stderr}`).toBe(0);
+      const payload: unknown = JSON.parse(run.stdout);
+      for (const field of widget.fields) {
+        expect(readPath(payload, field.path).length, `${widget.id} -> ${field.path}`).toBeGreaterThan(0);
+      }
+    }
+
+    const schema = await runCli(["plugin", "schema", "status.v1"], root);
+    expect(schema.code).toBe(0);
+    expect((JSON.parse(schema.stdout) as { $id: string }).$id).toContain("status.v1");
+    const unknown = await runCli(["plugin", "schema", "nope"], root);
+    expect(unknown.code).toBe(1);
+    expect(unknown.stderr).toContain("Unknown schema");
+    expect((await runCli(["plugin"], root)).code).toBe(1);
   });
 
   it("exits 1 with a readable message on an unknown option", async () => {

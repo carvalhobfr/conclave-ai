@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ProductRunView, ProjectView, RuntimeModeView, ValidationRunView } from "../../src/web/contracts.js";
+import type { CommitTimeline } from "../../src/workflow/commit-timeline.js";
 import { App } from "./app.js";
 
 const project: ProjectView = {
@@ -333,5 +334,72 @@ describe("opening a repository by path", () => {
     await screen.findByText("auth-repository");
     expect(screen.getByRole("button", { name: "Review" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("region", { name: "Conclave composer" })).toBeTruthy();
+  });
+});
+
+describe("Commit timeline", () => {
+  const local: ProjectView = { ...project, id: "local:repo", name: "repo", path: "/tmp/repo", source: "local", gitStatus: "clean" };
+  const timeline = (analyzed: boolean): CommitTimeline => ({
+    schemaVersion: 1,
+    generatedAt: "2026-10-27T12:00:00.000Z",
+    repository: { root: "/tmp/repo", name: "repo", branch: "main" },
+    range: { base: null, head: "HEAD", limit: analyzed ? 10 : 25 },
+    analyzed,
+    truncated: false,
+    summary: { commits: 2, verdicts: { pass: 0, warn: analyzed ? 1 : 0, block: 0, inconclusive: 0 }, unanalyzed: analyzed ? 1 : 2 },
+    commits: [
+      {
+        sha: "a".repeat(40), shortSha: "aaaaaaa", subject: "fix: restore the session", author: "Ada", authoredAt: "2026-10-27T10:00:00+00:00",
+        parents: ["b".repeat(40)], isMerge: false, stats: { filesChanged: 1, additions: 3, deletions: 1 },
+        ...(analyzed ? { analysis: { status: "analyzed" as const, verdict: "warn" as const, findings: { blocking: 0, warning: 1, info: 0 }, topFindings: [{ kind: "claim-inconclusive" as const, severity: "warning" as const, title: "Changed source could not be mapped to a symbol" }], filesChanged: 1, symbolsChanged: 0, impactedFiles: 0, impactedSymbols: 0 } } : {}),
+      },
+      {
+        sha: "b".repeat(40), shortSha: "bbbbbbb", subject: "feat: first commit", author: "Ada", authoredAt: "2026-10-26T10:00:00+00:00",
+        parents: [], isMerge: false, stats: { filesChanged: 2, additions: 9, deletions: 0 },
+        ...(analyzed ? { analysis: { status: "skipped" as const, reason: "root-commit" as const } } : {}),
+      },
+    ],
+  });
+
+  function mockCommits() {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      calls.push(url);
+      const body = url === "/api/runtime" ? runtime : url === "/api/projects/demo" ? project : url.startsWith("/api/history") ? [] : url.startsWith("/api/commits") ? timeline(url.includes("analyze=true")) : run;
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+    }));
+    return calls;
+  }
+
+  it("explains that the demo repository has no history", async () => {
+    mockCommits();
+    render(<App />);
+    await screen.findByText("auth-repository");
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace navigation" })).getByRole("button", { name: "Commits" }));
+    expect(await screen.findByText("No commits to show")).toBeTruthy();
+  });
+
+  it("lists commits and reviews them only when asked", async () => {
+    const calls = mockCommits();
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      calls.push(url);
+      const body = url === "/api/runtime" ? runtime : url === "/api/projects/demo" ? local : url.startsWith("/api/history") ? [] : url.startsWith("/api/commits") ? timeline(url.includes("analyze=true")) : run;
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+    }));
+    render(<App />);
+    await screen.findByText("repo");
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace navigation" })).getByRole("button", { name: "Commits" }));
+
+    const panel = await screen.findByRole("region", { name: "Commit timeline" });
+    expect(await within(panel).findByText("fix: restore the session")).toBeTruthy();
+    expect(within(panel).getByText(/aaaaaaa · Ada · 1 files \+3 −1/)).toBeTruthy();
+    expect(calls.some((url) => url.startsWith("/api/commits") && !url.includes("analyze=true"))).toBe(true);
+    expect(calls.some((url) => url.includes("analyze=true"))).toBe(false);
+
+    fireEvent.click(within(panel).getByRole("button", { name: "Review the latest 10 commits" }));
+    expect(await within(panel).findByText("warn")).toBeTruthy();
+    expect(within(panel).getByText("Changed source could not be mapped to a symbol")).toBeTruthy();
+    expect(within(panel).getByText("root commit")).toBeTruthy();
+    expect(calls.some((url) => url.includes("analyze=true") && url.includes("limit=10"))).toBe(true);
   });
 });

@@ -45,6 +45,7 @@ import { SuperValidator } from "../validation/super-validator.js";
 import { createReviewHandoff } from "../domain/review-handoff.js";
 import { createPullRequestSummary } from "../domain/pr-summary.js";
 import { listReviewHistory, saveReviewHistory } from "../storage/review-history.js";
+import { commitTimeline, type CommitTimeline } from "../workflow/commit-timeline.js";
 import { inferredReviewObjective, inspectRepository } from "../workflow/repository-inspector.js";
 import { createDemoReasoningEngine } from "./demo-runtime.js";
 import type {
@@ -779,6 +780,18 @@ export class ConclaveProductService {
       throw new ProductServiceError("provider_models_empty", "The provider returned no selectable model IDs.", "Check the provider account and models endpoint.");
     }
     return { provider: input.provider, endpoint, models };
+  }
+
+  /** Recent commits of an opened local repository, optionally reviewed one by one. Read-only and model-free. */
+  public async commits(id: string, options: { readonly limit?: number; readonly analyze?: boolean } = {}): Promise<CommitTimeline> {
+    const session = this.#session(id);
+    if (session.source === "demo") throw new ProductServiceError("commits_unavailable", "The demo repository has no Git history.", "Open a local repository.");
+    try {
+      return await commitTimeline({ repository: session.root, ...options });
+    } catch (error) {
+      // Every failure here is something the person can act on: a bad limit, a repository with no commits yet.
+      throw new ProductServiceError("commits_failed", error instanceof Error ? error.message : "The commits could not be listed.", "Adjust the request and try again.");
+    }
   }
 
   public async history(id: string): Promise<readonly ReviewHistoryView[]> {
