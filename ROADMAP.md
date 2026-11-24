@@ -139,3 +139,4 @@ The capability descriptions below are retained as a backlog, not the current del
 - richer large-repository graph summaries and incremental review performance;
 - CI-verified and signed receipt/report attestations;
 - optional hosted collaboration, only after a dedicated security design.
+- Conclave Crew: a separate `conclave-crew` package that runs coding agents in worktrees with Conclave as referee and a human gate; design in [docs/crew.md](docs/crew.md).
