@@ -6,7 +6,7 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 ## Unreleased
 
-- New package `conclave-crew` (0.1.0, in `packages/crew`, not published yet): coding agents (Claude Code or OpenCode drive; Codex only reviews) work a task in their own Git worktree in fixed-role rounds, Conclave referees each round with the approved test command as a receipt bound to the reviewed artifact, and the run stops on a pass, a limit, stagnation or regression, always waiting for a person. Agents only edit files inside the worktree and run no commands; Crew never merges or pushes. Conclave itself is unchanged and stays read-only. See [docs/crew.md](docs/crew.md).
+- New package `conclave-crew` (0.1.0, in `packages/crew`, not published yet): coding agents (Claude Code or OpenCode drive; Codex only reviews) work a task in their own Git worktree in fixed-role rounds, Conclave referees each round with the approved test command as a receipt bound to the reviewed artifact, and the run stops on a pass, a limit, stagnation or regression, always waiting for a person. Agents only edit files inside the worktree and run no commands; Crew never merges or pushes. Before any agent is called, `run` checks that Conclave 0.25+ and every CLI the crew needs are installed. Conclave itself is unchanged and stays read-only. See [docs/crew.md](docs/crew.md).
 
 ## [0.25.0] — 2026-10-27
 

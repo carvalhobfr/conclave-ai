@@ -6,7 +6,7 @@ Todas as mudanças relevantes do Conclave são documentadas aqui. O projeto segu
 
 ## Não lançado
 
-- Novo pacote `conclave-crew` (0.1.0, em `packages/crew`, ainda não publicado): agentes de código (Claude Code ou OpenCode escrevem; o Codex só revisa) trabalham uma tarefa na própria worktree Git em rodadas de papéis fixos, o Conclave arbitra cada rodada com o comando de testes aprovado como recibo ligado ao artefato revisado, e a execução para num pass, num limite, em estagnação ou regressão, sempre esperando uma pessoa. Os agentes só editam arquivos dentro da worktree e não rodam comandos; o Crew nunca faz merge nem push. O Conclave em si não muda e continua só de leitura. Veja [docs/crew.md](docs/crew.md).
+- Novo pacote `conclave-crew` (0.1.0, em `packages/crew`, ainda não publicado): agentes de código (Claude Code ou OpenCode escrevem; o Codex só revisa) trabalham uma tarefa na própria worktree Git em rodadas de papéis fixos, o Conclave arbitra cada rodada com o comando de testes aprovado como recibo ligado ao artefato revisado, e a execução para num pass, num limite, em estagnação ou regressão, sempre esperando uma pessoa. Os agentes só editam arquivos dentro da worktree e não rodam comandos; o Crew nunca faz merge nem push. Antes de chamar qualquer agente, o `run` confere se o Conclave 0.25+ e todas as CLIs da equipe estão instalados. O Conclave em si não muda e continua só de leitura. Veja [docs/crew.md](docs/crew.md).
 
 ## [0.25.0] — 2026-10-27
 

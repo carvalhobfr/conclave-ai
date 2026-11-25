@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { cliAgentRunner } from "./agents.js";
 import { repositoryRoot } from "./git.js";
 import { pluginManifest } from "./manifest.js";
+import { preflight } from "./preflight.js";
 import { type ConclaveCommand, DEFAULT_CONCLAVE, conclaveReferee } from "./referee.js";
 import { CrewError, discardRun, isRunning, startRun, validateCrew } from "./run.js";
 import { CrewStore, parseMember } from "./store.js";
@@ -129,12 +130,12 @@ async function main(argv: readonly string[]): Promise<number> {
   const parsed = parse(argv);
   const json = parsed.switches.has("--json");
   const [command, sub, third] = parsed.positionals;
-  if (command === undefined || command === "help" || parsed.switches.has("--help")) {
-    process.stdout.write(`${HELP}\n`);
-    return 0;
-  }
   if (command === "version" || parsed.switches.has("--version")) {
     process.stdout.write(`${version()}\n`);
+    return 0;
+  }
+  if (command === undefined || command === "help" || parsed.switches.has("--help")) {
+    process.stdout.write(`${HELP}\n`);
     return 0;
   }
   if (command === "plugin" && sub === "manifest") {
@@ -213,6 +214,9 @@ async function main(argv: readonly string[]): Promise<number> {
       if (crew === undefined) throw new CrewError("No crew yet: conclave-crew crew set --driver claude --navigator claude");
       validateCrew(crew);
       const limits = { rounds: integer(parsed, "--rounds", DEFAULT_LIMITS.rounds, 10), minutes: integer(parsed, "--minutes", DEFAULT_LIMITS.minutes, 480) };
+      const conclave = conclaveCommand(parsed);
+      const ready = await preflight(crew, conclave);
+      if (ready.problems.length > 0) throw new CrewError(`Can't start yet:\n  ${ready.problems.join("\n  ")}`);
       const tests = await store.tests();
       const disclosure = [
         `Task: ${task.objective}`,
@@ -226,7 +230,7 @@ async function main(argv: readonly string[]): Promise<number> {
         if (!(await confirm("Start?"))) return 1;
       }
       const run = await startRun({ task, crew, limits }, {
-        store, agent: cliAgentRunner, referee: conclaveReferee(conclaveCommand(parsed)),
+        store, agent: cliAgentRunner, referee: conclaveReferee(conclave),
         onStep: (step) => {
           if (!json) process.stderr.write(`round ${String(step.round)} ${step.step} ${step.ok ? "ok" : "failed"}${step.note === undefined ? "" : `: ${step.note.split("\n")[0] ?? ""}`}\n`);
         },

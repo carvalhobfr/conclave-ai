@@ -1,0 +1,84 @@
+name: Publish Conclave Crew to npm
+
+# Publishes packages/crew when a `crew-vX.Y.Z` tag is pushed. Separate from publish.yml so a Crew
+# release never publishes conclave-ai and the reverse. Authentication uses npm trusted publishing
+# (OIDC): on npmjs.com, conclave-crew trusts this repository, this workflow file and the `npm`
+# environment. No npm token is stored here; npm attaches a provenance attestation.
+on:
+  push:
+    tags:
+      - "crew-v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-crew
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: npm
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # npm trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      # Trusted publishing needs npm 11.5.1 or newer.
+      - run: npm install --global npm@latest
+
+      - name: Check that the tag matches packages/crew/package.json
+        id: version
+        run: |
+          version="$(node -p "require('./packages/crew/package.json').version")"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "crew-v${version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match packages/crew version ${version}"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if npm view "conclave-crew@${version}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::conclave-crew@${version} is already on npm; skipping publish"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.version.outputs.published == 'false'
+        run: npm ci
+
+      # Crew's run tests use the Conclave bundle as referee, so Conclave is built first.
+      - name: Verify
+        if: steps.version.outputs.published == 'false'
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run build
+          npm run build:crew
+          npm run test:crew
+
+      # prepack rebuilds dist before packing.
+      - name: Publish
+        if: steps.version.outputs.published == 'false'
+        run: npm publish --workspace conclave-crew --access public
+
+      - name: Create GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "crew-v${VERSION}" >/dev/null 2>&1; then exit 0; fi
+          printf 'conclave-crew %s. See [docs/crew.md](https://github.com/carvalhobfr/conclave-ai/blob/master/docs/crew.md) and the Unreleased or matching section of CHANGELOG.md.\n' "${VERSION}" > release-notes.md
+          gh release create "crew-v${VERSION}" --title "conclave-crew ${VERSION}" --notes-file release-notes.md --verify-tag --latest=false

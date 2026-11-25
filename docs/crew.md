@@ -66,10 +66,12 @@ A host that had planned to run agent rounds itself (a desktop app's pair-program
 
 Checked on 2026-11-25:
 
-- Tests (`npm run test:crew`, 21): the adapters' arguments and reply parsing for the three CLIs; the navigator's problems (anything without a file and line dropped); runs with a fake agent and referee in real temporary repositories: a pass in one round with the person's checkout untouched, the round limit, Conclave's stagnation stopping the loop, no changes, Stop, an agent failure, test failures handed to the driver with the receipt bound to the probe's artifact, discard; and one run refereed by the real Conclave build, whose receipt comes back `current`.
+- Tests (`npm run test:crew`, 27, including the built command and the preflight): the adapters' arguments and reply parsing for the three CLIs; the navigator's problems (anything without a file and line dropped); runs with a fake agent and referee in real temporary repositories: a pass in one round with the person's checkout untouched, the round limit, Conclave's stagnation stopping the loop, no changes, Stop, an agent failure, test failures handed to the driver with the receipt bound to the probe's artifact, discard; and one run refereed by the real Conclave build, whose receipt comes back `current`.
 - A real run in a throwaway repository with Claude Code (haiku) as driver and navigator, the real Conclave 0.25 and `node test.mjs` approved: plan, critique, build, commit, review, tests (exit 0), Conclave `pass` with the receipt `current`, in one round; the agent added `sub` to `math.js` and a check to `test.mjs`; the person's `main` stayed clean; `discard` removed the worktree and the branch.
 
-Not built yet: the cockpit's Crew page and "Make a task" from findings, backup providers, the scheduled audit, publishing to npm (needs its own tag and workflow), and a live OpenCode or Codex run.
+Before any agent is called, `run` checks that Conclave 0.25 or newer and every CLI the crew names answer `--version`, so a missing tool costs nothing. Releases use their own `crew-vX.Y.Z` tags and `.github/workflows/publish-crew.yml` (trusted publishing).
+
+Not built yet: the cockpit's Crew page and "Make a task" from findings, backup providers, the scheduled audit, and a live OpenCode or Codex run.
 
 ## Decisions (owner, 2026-11-25)
 

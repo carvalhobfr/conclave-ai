@@ -17,3 +17,15 @@ npm run release:tag      # tags vX.Y.Z and pushes; .github/workflows/publish.yml
 ```
 
 `release:bump` accepts `patch`, `minor`, `major`, or an exact version, and keeps every pinned `conclave-ai@x.y.z` reference in sync.
+
+### Conclave Crew
+
+`conclave-crew` (`packages/crew`) releases on its own tag, so a Crew release never publishes `conclave-ai` and the reverse:
+
+```bash
+# bump "version" in packages/crew/package.json and add the CHANGELOG lines, then:
+git commit -am "feat: … (crew x.y.z)"
+git tag -a crew-vX.Y.Z -m "conclave-crew X.Y.Z" && git push --follow-tags
+```
+
+`.github/workflows/publish-crew.yml` verifies, publishes through trusted publishing and creates a GitHub release that is never marked latest.
