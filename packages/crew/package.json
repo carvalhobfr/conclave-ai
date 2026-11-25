@@ -1,0 +1,46 @@
+{
+  "name": "conclave-crew",
+  "version": "0.1.0",
+  "description": "Runs coding agents in their own Git worktree, in fixed-role rounds, with Conclave as referee and a person approving the result",
+  "keywords": [
+    "ai",
+    "agent",
+    "code-review",
+    "conclave",
+    "worktree",
+    "cli"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/carvalhobfr/conclave-ai.git",
+    "directory": "packages/crew"
+  },
+  "homepage": "https://github.com/carvalhobfr/conclave-ai/blob/master/docs/crew.md",
+  "type": "module",
+  "main": "dist/lib.js",
+  "types": "dist/lib.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib.d.ts",
+      "default": "./dist/lib.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "conclave-crew": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json && node scripts/mark-executable.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}

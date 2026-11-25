@@ -1,6 +1,6 @@
 # Contributing
 
-Keep changes small, evidence-backed, and covered by deterministic tests. Conclave is a read-only reviewer: do not add repository mutation, patch application, merge, or autonomous task execution to its public surfaces.
+Keep changes small, evidence-backed, and covered by deterministic tests. Conclave is a read-only reviewer: do not add repository mutation, patch application, merge, or autonomous task execution to its public surfaces. The one exception is the separate `conclave-crew` package in `packages/crew`: it runs agents that edit files, only in a worktree and branch of its own, calls Conclave through its CLI like any host, and never merges or pushes. Nothing from it moves into `conclave-ai`.
 
 Before opening a change, run `npm run verify`. New retrieval, reasoning, and validation fixtures must declare their expected outcomes before evaluation. Never add credentials, generated `.conclave` state, or machine-specific paths.
 

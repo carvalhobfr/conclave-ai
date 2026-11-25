@@ -40,6 +40,9 @@ jobs:
       # Built before the suites so the CLI end-to-end smoke test has a bundle to run.
       - run: npm run build
       - run: npm test
+      # Conclave Crew (packages/crew): its run tests use the Conclave bundle built above as referee.
+      - run: npm run build:crew
+      - run: npm run test:crew
       # jsdom 30 pulls undici 8, which calls worker_threads.markAsUncloneable — a Node 22 API.
       # The product itself runs on Node 20; only this browser-environment test tooling does not.
       - run: npm run test:web

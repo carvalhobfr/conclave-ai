@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["coverage/", "demo/", "dist/", "node_modules/", "eslint.config.js", "tests/fixtures/", ".conclave/"],
+    ignores: ["coverage/", "demo/", "dist/", "packages/*/dist/", "node_modules/", "eslint.config.js", "tests/fixtures/", ".conclave/"],
   },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
@@ -31,7 +31,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["tests/**/*.ts"],
+    files: ["tests/**/*.ts", "packages/*/tests/**/*.ts"],
     rules: {
       "@typescript-eslint/no-non-null-assertion": "off",
     },

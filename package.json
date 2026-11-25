@@ -62,6 +62,9 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build:core": "tsc -p tsconfig.build.json && node scripts/mark-executable.mjs",
     "build:web": "vite build",
@@ -83,8 +86,8 @@
     "test": "vitest run",
     "test:web": "vitest run --config vitest.web.config.ts --maxWorkers=1",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit && tsc -p web/tsconfig.json --noEmit",
-    "verify": "npm run typecheck && npm run lint && npm run build && npm test && npm run test:web && npm run eval && npm run eval:graph && npm run eval:release && npm run audit",
+    "typecheck": "tsc --noEmit && tsc -p web/tsconfig.json --noEmit && tsc -p packages/crew/tsconfig.json --noEmit",
+    "verify": "npm run typecheck && npm run lint && npm run build && npm run build:crew && npm test && npm run test:crew && npm run test:web && npm run eval && npm run eval:graph && npm run eval:release && npm run audit",
     "eval:validation": "vitest run tests/git-change-set.test.ts tests/super-validator.test.ts tests/validation-web.test.ts --maxWorkers=1",
     "eval:precision": "vitest run tests/escalation.test.ts tests/source-defects.test.ts tests/pr-summary.test.ts --maxWorkers=1",
     "test:browser": "node scripts/test-browser.mjs",
@@ -92,7 +95,9 @@
     "eval:product": "node scripts/evaluate-product.mjs",
     "bench:audit": "npm run build:core --silent && node scripts/benchmark-audit.mjs",
     "release:bump": "node scripts/bump-version.mjs",
-    "release:tag": "node scripts/release-tag.mjs"
+    "release:tag": "node scripts/release-tag.mjs",
+    "build:crew": "npm run build --workspace conclave-crew",
+    "test:crew": "npm test --workspace conclave-crew"
   },
   "dependencies": {
     "ignore": "7.0.6",

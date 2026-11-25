@@ -4,6 +4,10 @@ All notable changes to Conclave are documented here. The project follows [Semant
 
 [English](CHANGELOG.md) · [Português (Brasil)](CHANGELOG.pt-BR.md)
 
+## Unreleased
+
+- New package `conclave-crew` (0.1.0, in `packages/crew`, not published yet): coding agents (Claude Code or OpenCode drive; Codex only reviews) work a task in their own Git worktree in fixed-role rounds, Conclave referees each round with the approved test command as a receipt bound to the reviewed artifact, and the run stops on a pass, a limit, stagnation or regression, always waiting for a person. Agents only edit files inside the worktree and run no commands; Crew never merges or pushes. Conclave itself is unchanged and stays read-only. See [docs/crew.md](docs/crew.md).
+
 ## [0.25.0] — 2026-10-27
 
 - Plugin manifest: widgets are now only what needs Conclave's own analysis. `repository-health` becomes `review-status` (blocked and unreviewed repositories, and each one's last verdict), `recent-commits` is removed because the commit list is plain Git, and `last-commit-verdict` is new; `commit-verdicts` is unchanged. A host draws every widget itself and shows branch, uncommitted work and commits from Git, adding Conclave's verdict when `conclave` is installed. `status` and `commits` still carry the Git data. The manifest's `protocol` stays 1: no host reads it yet.
